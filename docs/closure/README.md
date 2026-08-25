@@ -6,3 +6,4 @@ Milestone and documentation-freeze closure records live in this directory.
 - [SC-M00 Foundation](sc-m00-foundation-closure.md)
 - [SC-M01 Conversation System of Record](sc-m01-conversation-system-of-record-closure.md)
 - [SC-M02 Widget and WordPress Hub Replies](sc-m02-widget-and-hub-replies-closure.md)
+- [SC Contract v1 Authentication Profile Documentation Freeze](sc-contract-v1-authentication-profile-documentation-freeze-closure.md)
