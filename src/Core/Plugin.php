@@ -12,6 +12,11 @@ namespace UniversalSupportChat\Core;
 use UniversalSupportChat\Administration\Diagnostics\DiagnosticsPage;
 use UniversalSupportChat\Audit\AuditLogger;
 use UniversalSupportChat\Audit\AuditLogRepository;
+use UniversalSupportChat\ChannelContract\ContractDiscovery;
+use UniversalSupportChat\Conversations\ConversationRepository;
+use UniversalSupportChat\Conversations\MessageRepository;
+use UniversalSupportChat\Conversations\Rest\ConversationsController;
+use UniversalSupportChat\Conversations\RetentionCleanupHandler;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
 use UniversalSupportChat\Core\Configuration\Settings;
 use UniversalSupportChat\Core\Security\CredentialVault;
@@ -92,11 +97,17 @@ final class Plugin {
 		$vault      = new CredentialVault();
 		$caps       = new CapabilityRegistrar();
 
+		$conversations = new ConversationRepository( $schema_health );
+		$messages      = new MessageRepository( $schema_health, $vault );
+
 		$settings->register();
 
 		( new DiagnosticsPage( $schema_health, $audit_repo, $vault ) )->register();
+		( new ConversationsController( $schema_health, $conversations, $messages ) )->register();
+		( new RetentionCleanupHandler( $conversations, $messages, $settings, $audit ) )->register();
+		( new ContractDiscovery() )->register();
 
-		unset( $audit, $caps );
+		unset( $caps );
 	}
 
 	/**

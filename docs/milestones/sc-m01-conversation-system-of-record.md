@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Closed (PASS) — see `docs/closure/sc-m01-conversation-system-of-record-closure.md`.
 
 Depends on: SC-M00
 

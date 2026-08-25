@@ -6,7 +6,7 @@ Self-contained WordPress support-chat plugin: website widget, conversations, tic
 
 ## Status
 
-**SC-M00 Foundation** — plugin bootstrap, migration framework, vault, capabilities, privacy/audit, and test/CI foundations. No visitor-facing chat yet.
+**SC-M01 Conversation System of Record** — conversations/messages persistence, authenticated visitor REST, retention, and inert Contract v1 discovery. Widget/Hub UI arrives in SC-M02.
 
 ## Requirements
 

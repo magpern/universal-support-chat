@@ -86,8 +86,8 @@ final class DiagnosticsPage {
 		$vault_ok = false;
 
 		try {
-			$stored = $this->vault->encrypt( 'diagnostics-probe', 'diagnostics.self_test' );
-			$result = $this->vault->decrypt( $stored, 'diagnostics.self_test' );
+			$stored   = $this->vault->encrypt( 'diagnostics-probe', 'diagnostics.self_test' );
+			$result   = $this->vault->decrypt( $stored, 'diagnostics.self_test' );
 			$vault_ok = CredentialState::AVAILABLE === $result->state();
 		} catch ( CredentialUnavailableException $exception ) {
 			$vault_ok = false;

@@ -19,9 +19,9 @@ final class AuditLoggerTest extends WP_UnitTestCase {
 	public function test_record_redacts_secrets_from_persisted_context(): void {
 		( new Migrator( new MigrationLock() ) )->maybe_migrate();
 
-		$health  = new SchemaHealth();
-		$logger  = new AuditLogger( $health, new Redactor() );
-		$repo    = new AuditLogRepository( $health );
+		$health = new SchemaHealth();
+		$logger = new AuditLogger( $health, new Redactor() );
+		$repo   = new AuditLogRepository( $health );
 
 		$ok = $logger->record(
 			'diagnostics.self_test',
