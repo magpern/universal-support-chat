@@ -52,6 +52,7 @@ UT Adapter M1 (Universal Telegram repository, PR #32, merged `01f18075d77e1ff117
 
 - New ADR: **ADR-0007**, `docs/adr/0007-contract-v1-mutual-signed-adapter-authentication-profile.md`.
 - Auth profile identifier: **`support-channel-contract-auth/v1`** (independent of, and additional to, the existing Contract operations identifier `support-channel-contract/v1`).
+- Canonical signed string (ADR-0007 §3): **ten** newline-joined canonical lines — (1) auth-profile/domain-separation constant, (2) Contract version, (3) sender, (4) audience, (5) key ID, (6) timestamp, (7) nonce, (8) uppercase HTTP method, (9) canonical route path, (10) body SHA-256.
 - Canonical URL and commit SHA for Universal Telegram to pin: the blob URL and commit SHA of `docs/adr/0007-contract-v1-mutual-signed-adapter-authentication-profile.md` **on `main` after this PR merges** — not yet available; this PR is not merged (see Product Owner acceptance below). The branch-head commit at freeze completion is recorded in the PR itself; Universal Telegram must pin the post-merge `main` SHA, not the branch SHA, per the existing ADR-0005 pinning convention (`docs/adr/0002...md` §"Relationship to Universal Telegram").
 
 ## Explicit non-implementation confirmation
