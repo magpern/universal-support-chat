@@ -91,6 +91,7 @@ final class VisitorRestTest extends WP_UnitTestCase {
 		$this->assertCount( 1, $payload['messages'] );
 		$this->assertSame( 'Hello support', $payload['messages'][0]['text'] );
 		$this->assertSame( 'visitor', $payload['messages'][0]['direction'] );
+		$this->assertSame( 'You', $payload['messages'][0]['author_label'] );
 	}
 
 	public function test_cross_visitor_returns_uniform_404(): void {

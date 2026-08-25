@@ -2,4 +2,4 @@
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$DIR/_lib.sh"
-sc_compose_run "8.1" vendor/bin/phpstan analyse -c phpstan.neon.dist "$@"
+sc_compose_run "8.1" vendor/bin/phpstan analyse -c phpstan.neon.dist --memory-limit=1G "$@"
