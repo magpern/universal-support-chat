@@ -9,6 +9,7 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Core\Lifecycle;
 
+use UniversalSupportChat\ChannelContract\Auth\NonceCleanupHandler;
 use UniversalSupportChat\Conversations\RetentionCleanupHandler;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
 use UniversalSupportChat\Core\Configuration\Settings;
@@ -31,6 +32,11 @@ final class Uninstaller {
 			wp_unschedule_event( $timestamp, RetentionCleanupHandler::CRON_HOOK );
 		}
 
+		$nonce_timestamp = wp_next_scheduled( NonceCleanupHandler::CRON_HOOK );
+		if ( false !== $nonce_timestamp ) {
+			wp_unschedule_event( $nonce_timestamp, NonceCleanupHandler::CRON_HOOK );
+		}
+
 		$settings = ( new Settings() )->get();
 
 		if ( true !== $settings['remove_data_on_uninstall'] ) {
@@ -41,9 +47,14 @@ final class Uninstaller {
 		$this->drop_table( Migrator::CONVERSATION_NOTES_TABLE );
 		$this->drop_table( Migrator::CONVERSATION_MESSAGES_TABLE );
 		$this->drop_table( Migrator::CONVERSATIONS_TABLE );
+		$this->drop_table( Migrator::CHANNEL_STATUS_TABLE );
+		$this->drop_table( Migrator::CONTRACT_NONCES_TABLE );
+		$this->drop_table( Migrator::CHANNEL_PEERS_TABLE );
 		delete_option( Settings::OPTION_NAME );
 		delete_option( 'universal_support_chat_db_version' );
 		delete_option( 'universal_support_chat_migration_lock' );
+		delete_option( 'universal_support_chat_contract_own_key' );
+		delete_option( 'universal_support_chat_contract_own_key_secret' );
 	}
 
 	/**

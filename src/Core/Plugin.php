@@ -16,7 +16,18 @@ use UniversalSupportChat\Administration\Diagnostics\DiagnosticsPage;
 use UniversalSupportChat\Administration\Hub\HubPage;
 use UniversalSupportChat\Audit\AuditLogger;
 use UniversalSupportChat\Audit\AuditLogRepository;
+use UniversalSupportChat\ChannelContract\Admin\PairingActions;
+use UniversalSupportChat\ChannelContract\Admin\PairingPage;
+use UniversalSupportChat\ChannelContract\Auth\NonceCleanupHandler;
+use UniversalSupportChat\ChannelContract\Auth\NonceReplayRepository;
+use UniversalSupportChat\ChannelContract\Auth\OwnKeyManager;
+use UniversalSupportChat\ChannelContract\Auth\PairingService;
+use UniversalSupportChat\ChannelContract\Auth\PeerRepository;
+use UniversalSupportChat\ChannelContract\Auth\SignatureVerifier;
+use UniversalSupportChat\ChannelContract\ChannelStatusRepository;
 use UniversalSupportChat\ChannelContract\ContractDiscovery;
+use UniversalSupportChat\ChannelContract\Rest\ContractOperationDispatcher;
+use UniversalSupportChat\ChannelContract\Rest\ContractOperationsController;
 use UniversalSupportChat\ChatWidget\WidgetAssets;
 use UniversalSupportChat\Conversations\ConversationRepository;
 use UniversalSupportChat\Conversations\MessageRepository;
@@ -107,12 +118,24 @@ final class Plugin {
 		$messages      = new MessageRepository( $schema_health, $vault );
 		$notes         = new NoteRepository( $schema_health, $vault );
 
+		$peers          = new PeerRepository( $schema_health );
+		$nonces         = new NonceReplayRepository( $schema_health );
+		$own_keys       = new OwnKeyManager( $vault );
+		$channel_status = new ChannelStatusRepository( $schema_health );
+		$pairing        = new PairingService( $peers, $audit );
+		$verifier       = new SignatureVerifier( $peers, $nonces );
+		$dispatcher     = new ContractOperationDispatcher( $conversations, $messages, $channel_status, $audit );
+
 		$settings->register();
 
 		( new DiagnosticsPage( $schema_health, $audit_repo, $vault ) )->register();
 		( new ConversationsController( $schema_health, $conversations, $messages ) )->register();
 		( new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit ) )->register();
-		( new ContractDiscovery() )->register();
+		( new ContractDiscovery( $peers ) )->register();
+		( new ContractOperationsController( $verifier, $dispatcher ) )->register();
+		( new NonceCleanupHandler( $nonces ) )->register();
+		( new PairingPage( $own_keys, $peers ) )->register();
+		( new PairingActions( $pairing, $own_keys ) )->register();
 
 		$inbox  = new ConversationInboxPage( $schema_health, $conversations );
 		$detail = new ConversationDetailPage( $schema_health, $conversations, $messages, $notes );

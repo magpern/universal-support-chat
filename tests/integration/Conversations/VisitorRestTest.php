@@ -5,6 +5,8 @@
 
 namespace UniversalSupportChat\Tests\Integration\Conversations;
 
+use UniversalSupportChat\ChannelContract\Auth\ContractIdentity;
+use UniversalSupportChat\ChannelContract\Auth\PeerRepository;
 use UniversalSupportChat\ChannelContract\ContractDiscovery;
 use UniversalSupportChat\Conversations\ConversationRepository;
 use UniversalSupportChat\Conversations\MessageRepository;
@@ -129,13 +131,15 @@ final class VisitorRestTest extends WP_UnitTestCase {
 		$this->assertSame( 400, $response->get_status() );
 	}
 
-	public function test_contract_discovery_is_inert(): void {
-		$discovery = new ContractDiscovery();
+	public function test_contract_discovery_is_unavailable_with_no_paired_peer(): void {
+		$discovery = new ContractDiscovery( new PeerRepository( new SchemaHealth() ) );
 		$response  = $discovery->handle_discover();
 		$data      = $response->get_data();
 		$this->assertTrue( $data['ok'] );
 		$this->assertSame( ContractDiscovery::CONTRACT_VERSION_ID, $data['contract_version'] );
+		$this->assertSame( ContractIdentity::AUTH_PROFILE_ID, $data['auth_profile'] );
 		$this->assertFalse( $data['adapter_required'] );
 		$this->assertFalse( $data['channel_available'] );
+		$this->assertSame( array(), $data['operations'] );
 	}
 }

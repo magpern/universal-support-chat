@@ -434,6 +434,111 @@ class ConversationRepository {
 	}
 
 	/**
+	 * Claims a conversation for an operator. Idempotent when already
+	 * claimed by the same operator. Returns null when the schema is
+	 * unavailable or the conversation is claimed by a different operator.
+	 *
+	 * @param Conversation $conversation  Conversation snapshot.
+	 * @param int          $operator_user_id Claiming operator's WP user ID.
+	 */
+	public function claim( Conversation $conversation, int $operator_user_id ): ?Conversation {
+		if ( ! $this->schema_health->is_available() ) {
+			return null;
+		}
+
+		if ( null !== $conversation->assigned_operator_id() ) {
+			return $conversation->assigned_operator_id() === $operator_user_id ? $conversation : null;
+		}
+
+		global $wpdb;
+
+		$table = $wpdb->prefix . Migrator::CONVERSATIONS_TABLE;
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
+		$updated = $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$table} SET assigned_operator_id = %d, updated_at = %s WHERE id = %d AND assigned_operator_id IS NULL",
+				$operator_user_id,
+				current_time( 'mysql', true ),
+				$conversation->id()
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		if ( 1 !== (int) $updated ) {
+			$fresh = $this->find_by_id( $conversation->id() );
+			return ( null !== $fresh && $fresh->assigned_operator_id() === $operator_user_id ) ? $fresh : null;
+		}
+
+		return $this->find_by_id( $conversation->id() );
+	}
+
+	/**
+	 * Releases a conversation's claim. Idempotent when already unclaimed.
+	 * Returns null when the schema is unavailable or the conversation is
+	 * claimed by a different operator.
+	 *
+	 * @param Conversation $conversation     Conversation snapshot.
+	 * @param int          $operator_user_id Releasing operator's WP user ID.
+	 */
+	public function release( Conversation $conversation, int $operator_user_id ): ?Conversation {
+		if ( ! $this->schema_health->is_available() ) {
+			return null;
+		}
+
+		if ( null === $conversation->assigned_operator_id() ) {
+			return $conversation;
+		}
+
+		if ( $conversation->assigned_operator_id() !== $operator_user_id ) {
+			return null;
+		}
+
+		global $wpdb;
+
+		$table = $wpdb->prefix . Migrator::CONVERSATIONS_TABLE;
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
+		$wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$table} SET assigned_operator_id = NULL, updated_at = %s WHERE id = %d AND assigned_operator_id = %d",
+				current_time( 'mysql', true ),
+				$conversation->id(),
+				$operator_user_id
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		return $this->find_by_id( $conversation->id() );
+	}
+
+	/**
+	 * Assigns (or reassigns) a conversation to an operator unconditionally.
+	 *
+	 * @param Conversation $conversation     Conversation snapshot.
+	 * @param int          $operator_user_id Operator's WP user ID.
+	 */
+	public function assign( Conversation $conversation, int $operator_user_id ): ?Conversation {
+		if ( ! $this->schema_health->is_available() ) {
+			return null;
+		}
+
+		global $wpdb;
+
+		$table = $wpdb->prefix . Migrator::CONVERSATIONS_TABLE;
+		$wpdb->update(
+			$table,
+			array(
+				'assigned_operator_id' => $operator_user_id,
+				'updated_at'           => current_time( 'mysql', true ),
+			),
+			array( 'id' => $conversation->id() ),
+			array( '%d', '%s' ),
+			array( '%d' )
+		);
+
+		return $this->find_by_id( $conversation->id() );
+	}
+
+	/**
 	 * Bumps updated_at without changing status.
 	 *
 	 * @param Conversation $conversation Conversation snapshot.
