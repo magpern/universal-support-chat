@@ -16,7 +16,9 @@ namespace UniversalSupportChat\Persistence;
  */
 class Migrator {
 
-	public const AUDIT_LOG_TABLE = 'universal_support_chat_audit_log';
+	public const AUDIT_LOG_TABLE             = 'universal_support_chat_audit_log';
+	public const CONVERSATIONS_TABLE         = 'universal_support_chat_conversations';
+	public const CONVERSATION_MESSAGES_TABLE = 'universal_support_chat_conversation_messages';
 
 	private const DB_VERSION_OPTION = 'universal_support_chat_db_version';
 
@@ -40,7 +42,7 @@ class Migrator {
 	 * Highest step number this migrator knows how to run.
 	 */
 	protected function target_version(): int {
-		return 1;
+		return 3;
 	}
 
 	/**
@@ -100,6 +102,8 @@ class Migrator {
 	protected function run_step( int $number ): void {
 		$steps = array(
 			1 => array( array( $this, 'step_1_create_audit_log_table' ), array( $this, 'verify_step_1' ) ),
+			2 => array( array( $this, 'step_2_create_conversations_table' ), array( $this, 'verify_step_2' ) ),
+			3 => array( array( $this, 'step_3_create_conversation_messages_table' ), array( $this, 'verify_step_3' ) ),
 		);
 
 		if ( ! isset( $steps[ $number ] ) ) {
@@ -148,8 +152,160 @@ class Migrator {
 	private function verify_step_1(): bool {
 		global $wpdb;
 
-		$table    = $wpdb->prefix . self::AUDIT_LOG_TABLE;
-		$expected = array( 'id', 'occurred_at', 'actor_type', 'actor_id', 'action', 'context', 'privacy_classification' );
+		return $this->table_has_columns(
+			$wpdb->prefix . self::AUDIT_LOG_TABLE,
+			array( 'id', 'occurred_at', 'actor_type', 'actor_id', 'action', 'context', 'privacy_classification' )
+		);
+	}
+
+	/**
+	 * Creates Support Chat–owned conversations table. No Telegram/channel columns.
+	 */
+	private function step_2_create_conversations_table(): void {
+		global $wpdb;
+
+		$table           = $wpdb->prefix . self::CONVERSATIONS_TABLE;
+		$charset_collate = $wpdb->get_charset_collate();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$table} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				conversation_uuid CHAR(36) NOT NULL,
+				owner_user_id BIGINT UNSIGNED NOT NULL,
+				status VARCHAR(32) NOT NULL DEFAULT 'new',
+				assigned_operator_id BIGINT UNSIGNED NULL,
+				start_idempotency_key CHAR(36) NULL,
+				created_at DATETIME NOT NULL,
+				updated_at DATETIME NOT NULL,
+				resolved_at DATETIME NULL,
+				expires_at DATETIME NULL,
+				assignee_last_seen_message_id BIGINT UNSIGNED NULL,
+				PRIMARY KEY (id),
+				UNIQUE KEY conversation_uuid (conversation_uuid),
+				UNIQUE KEY start_idempotency_key (start_idempotency_key),
+				KEY owner_status (owner_user_id, status),
+				KEY status_updated (status, updated_at)
+			) {$charset_collate}"
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	/**
+	 * Verifies step 2 columns exist and channel-native columns do not.
+	 */
+	private function verify_step_2(): bool {
+		global $wpdb;
+
+		$table = $wpdb->prefix . self::CONVERSATIONS_TABLE;
+		$ok    = $this->table_has_columns(
+			$table,
+			array(
+				'id',
+				'conversation_uuid',
+				'owner_user_id',
+				'status',
+				'assigned_operator_id',
+				'start_idempotency_key',
+				'created_at',
+				'updated_at',
+				'resolved_at',
+				'expires_at',
+				'assignee_last_seen_message_id',
+			)
+		);
+
+		if ( ! $ok ) {
+			return false;
+		}
+
+		$forbidden = array(
+			'telegram_topic_id',
+			'bot_id',
+			'destination_id',
+			'topic_creation_state',
+			'secret_hash',
+			'outbound_message_uuid',
+			'telegram_message_id',
+			'channel_case_ref',
+		);
+
+		return ! $this->table_has_any_column( $table, $forbidden );
+	}
+
+	/**
+	 * Creates encrypted conversation messages table. No Telegram/channel columns.
+	 */
+	private function step_3_create_conversation_messages_table(): void {
+		global $wpdb;
+
+		$table           = $wpdb->prefix . self::CONVERSATION_MESSAGES_TABLE;
+		$charset_collate = $wpdb->get_charset_collate();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$table} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				conversation_id BIGINT UNSIGNED NOT NULL,
+				message_uuid CHAR(36) NOT NULL,
+				direction VARCHAR(16) NOT NULL,
+				body_ciphertext LONGTEXT NULL,
+				delivery_state VARCHAR(16) NOT NULL DEFAULT 'stored',
+				idempotency_key CHAR(36) NULL,
+				created_at DATETIME NOT NULL,
+				PRIMARY KEY (id),
+				UNIQUE KEY message_uuid (message_uuid),
+				UNIQUE KEY conversation_idempotency (conversation_id, idempotency_key),
+				KEY conversation_id_seq (conversation_id, id)
+			) {$charset_collate}"
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	/**
+	 * Verifies step 3 columns exist and channel-native columns do not.
+	 */
+	private function verify_step_3(): bool {
+		global $wpdb;
+
+		$table = $wpdb->prefix . self::CONVERSATION_MESSAGES_TABLE;
+		$ok    = $this->table_has_columns(
+			$table,
+			array(
+				'id',
+				'conversation_id',
+				'message_uuid',
+				'direction',
+				'body_ciphertext',
+				'delivery_state',
+				'idempotency_key',
+				'created_at',
+			)
+		);
+
+		if ( ! $ok ) {
+			return false;
+		}
+
+		$forbidden = array(
+			'telegram_message_id',
+			'outbound_message_uuid',
+			'bot_id',
+			'destination_id',
+			'telegram_topic_id',
+		);
+
+		return ! $this->table_has_any_column( $table, $forbidden );
+	}
+
+	/**
+	 * Whether a table contains every expected column.
+	 *
+	 * @param string             $table    Table name including prefix.
+	 * @param array<int, string> $expected Expected column names.
+	 */
+	private function table_has_columns( string $table, array $expected ): bool {
+		global $wpdb;
 
 		$columns = $wpdb->get_col(
 			$wpdb->prepare(
@@ -159,6 +315,34 @@ class Migrator {
 			)
 		);
 
+		if ( ! is_array( $columns ) ) {
+			return false;
+		}
+
 		return array() === array_diff( $expected, $columns );
+	}
+
+	/**
+	 * Whether a table contains any of the named columns.
+	 *
+	 * @param string             $table Table name including prefix.
+	 * @param array<int, string> $names Column names that must not exist.
+	 */
+	private function table_has_any_column( string $table, array $names ): bool {
+		global $wpdb;
+
+		$columns = $wpdb->get_col(
+			$wpdb->prepare(
+				'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s',
+				$wpdb->dbname,
+				$table
+			)
+		);
+
+		if ( ! is_array( $columns ) ) {
+			return false;
+		}
+
+		return array() !== array_intersect( $names, $columns );
 	}
 }
