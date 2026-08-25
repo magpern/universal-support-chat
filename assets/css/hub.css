@@ -1,0 +1,44 @@
+/**
+ * Universal Support Chat — Hub admin styles (SC-M02).
+ */
+.usc-hub-transcript {
+	max-width: 720px;
+	margin: 1rem 0 1.5rem;
+	padding: 1rem;
+	border: 1px solid #c3c4c7;
+	background: #fff;
+	max-height: 420px;
+	overflow-y: auto;
+}
+
+.usc-hub-message {
+	margin-bottom: 1rem;
+	padding-bottom: 0.75rem;
+	border-bottom: 1px solid #eee;
+}
+
+.usc-hub-message__meta {
+	color: #646970;
+	font-size: 12px;
+}
+
+.usc-hub-message p {
+	margin: 0.35rem 0 0;
+	white-space: pre-wrap;
+}
+
+.usc-hub-notes {
+	max-width: 720px;
+	margin-bottom: 1rem;
+}
+
+.usc-hub-note {
+	padding: 0.75rem;
+	margin-bottom: 0.5rem;
+	background: #f6f7f7;
+	border-left: 3px solid #646970;
+}
+
+.usc-hub-filters {
+	margin: 0.5rem 0 1rem;
+}
