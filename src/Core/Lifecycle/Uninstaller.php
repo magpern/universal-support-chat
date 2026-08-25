@@ -38,6 +38,7 @@ final class Uninstaller {
 		}
 
 		$this->drop_table( Migrator::AUDIT_LOG_TABLE );
+		$this->drop_table( Migrator::CONVERSATION_NOTES_TABLE );
 		$this->drop_table( Migrator::CONVERSATION_MESSAGES_TABLE );
 		$this->drop_table( Migrator::CONVERSATIONS_TABLE );
 		delete_option( Settings::OPTION_NAME );

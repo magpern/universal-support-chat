@@ -322,6 +322,100 @@ class ConversationRepository {
 		return array_map( static fn( array $row ) => Conversation::from_row( $row ), $rows );
 	}
 
+
+	/**
+	 * Finds a conversation by primary key.
+	 *
+	 * @param int $id Conversation primary key.
+	 */
+	public function find_by_id( int $id ): ?Conversation {
+		if ( ! $this->schema_health->is_available() || $id <= 0 ) {
+			return null;
+		}
+
+		global $wpdb;
+
+		$table = $wpdb->prefix . Migrator::CONVERSATIONS_TABLE;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
+		$row = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE id = %d LIMIT 1",
+				$id
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		return is_array( $row ) ? Conversation::from_row( $row ) : null;
+	}
+
+	/**
+	 * Lists conversations for the Hub inbox (newest activity first).
+	 *
+	 * @param string|null $status Optional status filter.
+	 * @param int         $page   1-based page.
+	 * @param int         $per_page Page size.
+	 *
+	 * @return array{items: array<int, Conversation>, total: int}
+	 */
+	public function list_for_hub( ?string $status = null, int $page = 1, int $per_page = 20 ): array {
+		if ( ! $this->schema_health->is_available() ) {
+			return array(
+				'items' => array(),
+				'total' => 0,
+			);
+		}
+
+		global $wpdb;
+
+		$table    = $wpdb->prefix . Migrator::CONVERSATIONS_TABLE;
+		$page     = max( 1, $page );
+		$per_page = max( 1, min( 100, $per_page ) );
+		$offset   = ( $page - 1 ) * $per_page;
+
+		if ( null !== $status && '' !== $status ) {
+			// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
+			$total = (int) $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT COUNT(*) FROM {$table} WHERE status = %s",
+					$status
+				)
+			);
+			$rows  = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT * FROM {$table} WHERE status = %s ORDER BY updated_at DESC, id DESC LIMIT %d OFFSET %d",
+					$status,
+					$per_page,
+					$offset
+				),
+				ARRAY_A
+			);
+			// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		} else {
+			// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
+			$total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" );
+			$rows  = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT * FROM {$table} ORDER BY updated_at DESC, id DESC LIMIT %d OFFSET %d",
+					$per_page,
+					$offset
+				),
+				ARRAY_A
+			);
+			// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		}
+
+		if ( ! is_array( $rows ) ) {
+			$rows = array();
+		}
+
+		return array(
+			'items' => array_map( static fn( array $row ) => Conversation::from_row( $row ), $rows ),
+			'total' => $total,
+		);
+	}
+
 	/**
 	 * Deletes a conversation by primary key.
 	 *
