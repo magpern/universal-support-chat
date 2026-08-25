@@ -10,9 +10,20 @@ declare( strict_types=1 );
 namespace UniversalSupportChat\ChannelContract\Auth;
 
 /**
- * The exact, fixed operation names Contract v1 defines. Never invented or
- * extended at runtime — a peer's permitted-operation allow-list (ADR-0007
- * §2) may only be drawn from ADAPTER_TO_SUPPORT_CHAT.
+ * The operation names this Contract v1 server actually implements. Never
+ * invented or extended at runtime — a peer's permitted-operation allow-list
+ * (ADR-0007 §2) may only be drawn from ADAPTER_TO_SUPPORT_CHAT, and
+ * discovery (ContractDiscovery) may only ever advertise a subset of it.
+ *
+ * ADR-0005 §5 additionally defines `update_operator_presence` as a Contract
+ * v1 adapter → Support Chat operation. It is deliberately **not** in this
+ * list: Support Chat has no Availability-boundary storage yet (not
+ * authorized until SC-M06, ARCHITECTURE.md), so there is no persisted
+ * effect this work package could honestly implement for it. Because it is
+ * absent from ADAPTER_TO_SUPPORT_CHAT, no peer can ever be paired with it,
+ * discovery never advertises it, and SignatureVerifier's operation-allow-
+ * list check fails closed on it with the same uniform ADR-0007 §3 denial as
+ * any other unrecognized operation — never a bespoke error path.
  */
 final class ContractOperations {
 
@@ -28,7 +39,6 @@ final class ContractOperations {
 		'resolve',
 		'reopen',
 		'update_assignment',
-		'update_operator_presence',
 		'report_channel_unavailable',
 		'report_delivery_failure',
 	);

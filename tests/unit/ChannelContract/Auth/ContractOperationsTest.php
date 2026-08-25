@@ -25,4 +25,13 @@ final class ContractOperationsTest extends TestCase {
 	public function test_invented_operation_name_is_invalid(): void {
 		$this->assertFalse( ContractOperations::is_valid_adapter_allow_list( array( 'delete_everything' ) ) );
 	}
+
+	public function test_update_operator_presence_is_not_an_implemented_operation(): void {
+		$this->assertNotContains( 'update_operator_presence', ContractOperations::ADAPTER_TO_SUPPORT_CHAT );
+		$this->assertFalse( ContractOperations::is_valid_adapter_allow_list( array( 'update_operator_presence' ) ) );
+	}
+
+	public function test_report_delivery_failure_is_an_implemented_operation(): void {
+		$this->assertContains( 'report_delivery_failure', ContractOperations::ADAPTER_TO_SUPPORT_CHAT );
+	}
 }

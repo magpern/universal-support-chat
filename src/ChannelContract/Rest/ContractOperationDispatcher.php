@@ -101,8 +101,6 @@ final class ContractOperationDispatcher {
 				return $this->reopen( $peer_id, $body );
 			case 'update_assignment':
 				return $this->update_assignment( $peer_id, $body );
-			case 'update_operator_presence':
-				return $this->update_operator_presence( $peer_id, $body );
 			case 'report_channel_unavailable':
 				return $this->report_channel_unavailable( $peer_id, $body );
 			case 'report_delivery_failure':
@@ -295,30 +293,6 @@ final class ContractOperationDispatcher {
 	}
 
 	/**
-	 * `update_operator_presence`. Accepted and audited only: Support Chat
-	 * has no Availability-boundary storage yet (not authorized until
-	 * SC-M06, ARCHITECTURE.md), so this operation has no persisted effect.
-	 *
-	 * @param string               $peer_id Verified sender peer ID.
-	 * @param array<string, mixed> $body    Decoded JSON request body.
-	 */
-	private function update_operator_presence( string $peer_id, array $body ): array {
-		$operator_user_id = $this->optional_operator_id( $body );
-		$presence_state   = $this->string_field( $body, 'presence_state' );
-
-		$context = array();
-		$map     = array();
-		if ( null !== $presence_state ) {
-			$context['presence_state'] = $presence_state;
-			$map['presence_state']     = Classification::INTERNAL;
-		}
-
-		$this->audit_op( 'contract.update_operator_presence', $peer_id, $context, $operator_user_id, $map );
-
-		return $this->ok( array() );
-	}
-
-	/**
 	 * `report_channel_unavailable`.
 	 *
 	 * @param string               $peer_id Verified sender peer ID.
@@ -359,7 +333,13 @@ final class ContractOperationDispatcher {
 			return $this->error( 404, 'not_found' );
 		}
 
-		$reason_code = $this->string_field( $body, 'reason_code' ) ?? 'unspecified';
+		$reason_code = $this->string_field( $body, 'reason_code' ) ?? 'delivery_failed';
+
+		// Safe to repeat: an UPSERT on the conversation's single channel-status
+		// row, keyed by `conversation_id` (ADR-0005 §3: Support Chat stores
+		// only the opaque reference plus channel status derived from adapter
+		// callbacks) — never Telegram-native IDs, message bodies, or queue state.
+		$this->channel_status->mark_degraded( $conversation->id(), $reason_code );
 
 		$this->audit_op(
 			'contract.delivery_failure_reported',

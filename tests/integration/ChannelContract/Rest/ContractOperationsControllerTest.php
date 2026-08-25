@@ -264,6 +264,75 @@ final class ContractOperationsControllerTest extends WP_UnitTestCase {
 		$this->assertSame( 'topic_deleted', $status['reason_code'] );
 	}
 
+	public function test_report_delivery_failure_marks_channel_status_degraded(): void {
+		$visitor        = self::factory()->user->create();
+		$conversation   = $this->conversations->create( $visitor );
+		$channel_status = new ChannelStatusRepository( new SchemaHealth() );
+
+		$response = $this->controller->handle(
+			$this->build_signed_request(
+				'report_delivery_failure',
+				array(
+					'channel_case_ref' => $conversation->uuid(),
+					'idempotency_key'  => wp_generate_uuid4(),
+					'reason_code'      => 'send_timeout',
+				)
+			)
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$status = $channel_status->status_for( $conversation->id() );
+		$this->assertSame( 'degraded', $status['status'] );
+		$this->assertSame( 'send_timeout', $status['reason_code'] );
+	}
+
+	public function test_report_delivery_failure_is_safe_to_repeat(): void {
+		global $wpdb;
+
+		$visitor      = self::factory()->user->create();
+		$conversation = $this->conversations->create( $visitor );
+
+		$body = array(
+			'channel_case_ref' => $conversation->uuid(),
+			'reason_code'      => 'send_timeout',
+		);
+
+		$first  = $this->controller->handle( $this->build_signed_request( 'report_delivery_failure', $body ) );
+		$second = $this->controller->handle( $this->build_signed_request( 'report_delivery_failure', $body ) );
+
+		$this->assertSame( 200, $first->get_status() );
+		$this->assertSame( 200, $second->get_status() );
+
+		$table = $wpdb->prefix . Migrator::CHANNEL_STATUS_TABLE;
+		$count = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE conversation_id = %d", $conversation->id() ) // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		);
+		$this->assertSame( 1, $count );
+	}
+
+	public function test_update_operator_presence_is_denied_as_unsupported(): void {
+		$conversation = $this->conversations->create( self::factory()->user->create() );
+		$request      = $this->build_signed_request(
+			'update_operator_presence',
+			array(
+				'channel_case_ref' => $conversation->uuid(),
+				'operator_user_id' => 1,
+				'presence_state'   => 'online',
+			)
+		);
+
+		$response = $this->controller->handle( $request );
+
+		$this->assertSame( 401, $response->get_status() );
+		$this->assertSame(
+			array(
+				'ok'     => false,
+				'reason' => 'contract_auth_failed',
+			),
+			$response->get_data()
+		);
+	}
+
 	public function test_hub_and_widget_conversation_lifecycle_unaffected_by_no_paired_peer(): void {
 		$visitor      = self::factory()->user->create();
 		$conversation = $this->conversations->create( $visitor );
