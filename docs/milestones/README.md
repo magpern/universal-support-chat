@@ -6,7 +6,7 @@ This registry reflects the **foundation documentation freeze**. No runtime miles
 
 | # | Milestone | Charter | Status | Depends on | R-trace |
 |---|---|---|---|---|---|
-| SC-M00 | Foundation | [sc-m00-foundation.md](sc-m00-foundation.md) | Planned | none | — |
+| SC-M00 | Foundation | [sc-m00-foundation.md](sc-m00-foundation.md) | Implemented (tech; see closure) | none | — |
 | SC-M01 | Conversation System of Record | [sc-m01-conversation-system-of-record.md](sc-m01-conversation-system-of-record.md) | Planned | SC-M00 | R1 |
 | SC-M02 | Widget and WordPress Hub Replies | [sc-m02-widget-and-hub-replies.md](sc-m02-widget-and-hub-replies.md) | Planned | SC-M01 | R5 |
 | UT Adapter M1 | Universal Telegram Support Chat Adapter | [ut-adapter-m1-universal-telegram-support-chat-adapter.md](ut-adapter-m1-universal-telegram-support-chat-adapter.md) | Planned (external repo) | Contract v1 (ADR-0005); SC-M01/M02 surfaces as needed | R1 |

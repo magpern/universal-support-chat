@@ -1,30 +1,33 @@
 # Architecture Reference — Universal Support Chat
 
-This document records product boundaries, contracts, and versioning conventions for Universal Support Chat. It is documentation-only at foundation; runtime module directories do not exist until SC-M00+.
+This document records product boundaries, contracts, and versioning conventions for Universal Support Chat.
 
 ## Product identity
 
 See [ADR-0002](adr/0002-plugin-identity-and-ownership-boundaries.md).
 
 - Display name: **Universal Support Chat**
-- Slug: `universal-support-chat`
+- Slug / text domain: `universal-support-chat`
+- PHP namespace: `UniversalSupportChat\`
+- Composer package: `magpern/universal-support-chat`
 - Standalone WordPress plugin; **must work fully without Universal Telegram**
 
-## Product boundaries (planned)
+## Product boundaries
 
-| Boundary | Responsibility | First milestone |
+| Boundary | Namespace | Status at SC-M00 |
 |---|---|---|
-| Core | Bootstrap, configuration, capabilities, vault, lifecycle | SC-M00 |
-| Persistence | Schema migrations, health | SC-M00 |
-| Privacy / Audit | Classification, redaction, audit log | SC-M00 |
-| Conversations | Conversations, messages, tickets, waiting, assignment, notes, retention, visitor REST | SC-M01 |
-| ChatWidget | Visitor widget (functional then polished) | SC-M02 / SC-M05 |
-| Administration (Hub) | Operator inbox, reply, workflow | SC-M02 |
-| Availability | Schedule, exceptions, Automatic/Online/Offline | SC-M06 |
-| AI | Operator drafts + approve-and-send; later direct AI | SC-AI1 / SC-AI2 |
-| ChannelContract | Server-side Contract v1 authority and discovery | SC-M01+ / before UT Adapter M1 consumers |
+| Core | `UniversalSupportChat\Core` | Implemented (composition root, configuration, lifecycle, capabilities, vault) |
+| Persistence | `UniversalSupportChat\Persistence` | Implemented (migrator, lock, schema health; `db_version` target 1) |
+| Privacy | `UniversalSupportChat\Privacy` | Implemented (classification, redactor) |
+| Audit | `UniversalSupportChat\Audit` | Implemented (audit logger + repository; audit log table) |
+| Administration | `UniversalSupportChat\Administration` | Implemented (`Diagnostics` subdomain only) |
+| Conversations | — | Not authorized until SC-M01 |
+| ChatWidget | — | Not authorized until SC-M02 |
+| Availability | — | Not authorized until SC-M06 |
+| AI | — | Not authorized until SC-AI1 |
+| ChannelContract | — | Server surface later; Contract v1 docs exist |
 
-Channel adapters (e.g. Universal Telegram) are **external plugins**, not boundaries inside this repository.
+Channel adapters (e.g. Universal Telegram) are **external plugins**, not boundaries inside this repository. A structural unit test forbids premature `src/` directories for unauthorized boundaries.
 
 ## Canonical Contract v1
 
@@ -59,11 +62,12 @@ Do not maintain a second full copy of Contract v1 in another repository.
 
 SC-AI1 precedes SC-AI2.
 
-## Versioning conventions (planned)
+## Versioning conventions
 
-- Plugin SemVer and independent integer `db_version` — defined in SC-M00 plan when runtime code begins.
+- Plugin SemVer: `UNIVERSAL_SUPPORT_CHAT_VERSION` — **`0.0.1`** at SC-M00.
+- Independent integer schema version option `universal_support_chat_db_version` — target **`1`** at SC-M00 (audit log table only).
 - No Contract v1 release tag is required for adapter pinning; commit SHA is sufficient.
-- This foundation freeze creates **no** plugin version, schema, tag, or release.
+- SC-M00 does not create a GitHub Release or version tag.
 
 ## Where to look
 

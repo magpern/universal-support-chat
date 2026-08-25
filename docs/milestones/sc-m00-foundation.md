@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Implemented (technical verification; Product Owner closure via merge)
 
 Depends on: none
 

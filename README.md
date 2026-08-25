@@ -2,17 +2,30 @@
 
 Self-contained WordPress support-chat plugin: website widget, conversations, tickets, waiting queue, WordPress Hub inbox and operator replies, support hours, privacy controls, and future chat AI.
 
-**Universal Support Chat must work fully without Universal Telegram.** Telegram (or any channel) is an optional adapter for escalated operator workflows only. Creating, storing, replying to, or resolving a support conversation must never require Telegram.
+**Universal Support Chat must work fully without Universal Telegram.** Telegram (or any channel) is an optional adapter for escalated operator workflows only.
 
 ## Status
 
-Foundation **documentation freeze**. Runtime plugin code is not present yet. Implementation begins only after frozen milestone plans and the approved program sequence (Support Chat docs → Universal Telegram supersession/adapter docs → SC-M00+ / Adapter M1 code).
+**SC-M00 Foundation** — plugin bootstrap, migration framework, vault, capabilities, privacy/audit, and test/CI foundations. No visitor-facing chat yet.
 
-## Requirements (planned runtime)
+## Requirements
 
-- WordPress 6.9+ (target; confirmed in SC-M00)
-- PHP 8.1+ (target; confirmed in SC-M00)
+- WordPress 6.9+
+- PHP 8.1+
 - No hard dependency on WooCommerce or Universal Telegram
+
+## Development
+
+This repository is developed through Docker; host PHP/Composer are not required.
+
+```
+bin/docker/composer.sh install --no-interaction
+bin/docker/phpcs.sh
+bin/docker/phpstan.sh
+bin/docker/test-unit.sh
+bin/docker/test-integration-wp-only.sh --wp-version=6.9 --php-version=8.1
+bin/docker/composer.sh run-script check-doc-links
+```
 
 ## Documentation
 
