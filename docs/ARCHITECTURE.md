@@ -20,9 +20,9 @@ See [ADR-0002](adr/0002-plugin-identity-and-ownership-boundaries.md).
 | Persistence | `UniversalSupportChat\Persistence` | Implemented (migrator, lock, schema health; `db_version` target 1) |
 | Privacy | `UniversalSupportChat\Privacy` | Implemented (classification, redactor) |
 | Audit | `UniversalSupportChat\Audit` | Implemented (audit logger + repository; audit log table) |
-| Administration | `UniversalSupportChat\Administration` | Implemented (`Diagnostics` subdomain only) |
+| Administration | `UniversalSupportChat\Administration` | Implemented (Diagnostics + Hub inbox/detail/reply/notes) |
 | Conversations | `UniversalSupportChat\Conversations` | Implemented (SC-M01: SoR, visitor REST, retention) |
-| ChatWidget | — | Not authorized until SC-M02 |
+| ChatWidget | `UniversalSupportChat\ChatWidget` | Implemented (SC-M02: minimal visitor widget) |
 | Availability | — | Not authorized until SC-M06 |
 | AI | — | Not authorized until SC-AI1 |
 | ChannelContract | `UniversalSupportChat\ChannelContract` | Inert Contract v1 discovery stub (SC-M01; no adapter calls) |
@@ -64,10 +64,10 @@ SC-AI1 precedes SC-AI2.
 
 ## Versioning conventions
 
-- Plugin SemVer: `UNIVERSAL_SUPPORT_CHAT_VERSION` — **`0.1.0`** at SC-M01 (`0.0.1` at SC-M00).
-- Independent integer schema version option `universal_support_chat_db_version` — target **`3`** at SC-M01 (1=audit, 2=conversations, 3=messages).
+- Plugin SemVer: `UNIVERSAL_SUPPORT_CHAT_VERSION` — **`0.2.0`** at SC-M02 (`0.1.0` at SC-M01).
+- Independent integer schema version option `universal_support_chat_db_version` — target **`4`** at SC-M02 (1=audit, 2=conversations, 3=messages, 4=notes).
 - No Contract v1 release tag is required for adapter pinning; commit SHA is sufficient.
-- SC-M01 does not create a GitHub Release or version tag.
+- SC-M02 does not create a GitHub Release or version tag.
 
 ## Where to look
 
