@@ -18,14 +18,14 @@ final class StructuralBoundariesTest extends TestCase {
 	 */
 	public function unauthorized_boundaries_provider(): array {
 		return array(
-			'Conversations' => array( 'Conversations' ),
-			'ChatWidget'    => array( 'ChatWidget' ),
-			'AI'            => array( 'AI' ),
-			'Telegram'      => array( 'Telegram' ),
-			'Queue'         => array( 'Queue' ),
-			'Events'        => array( 'Events' ),
-			'Automations'   => array( 'Automations' ),
-			'Integrations'  => array( 'Integrations' ),
+			'ChatWidget'   => array( 'ChatWidget' ),
+			'AI'           => array( 'AI' ),
+			'Telegram'     => array( 'Telegram' ),
+			'Queue'        => array( 'Queue' ),
+			'Events'       => array( 'Events' ),
+			'Automations'  => array( 'Automations' ),
+			'Integrations' => array( 'Integrations' ),
+			'Availability' => array( 'Availability' ),
 		);
 	}
 
@@ -35,5 +35,11 @@ final class StructuralBoundariesTest extends TestCase {
 	public function test_unauthorized_boundary_directory_does_not_exist( string $boundary ): void {
 		$path = dirname( __DIR__, 3 ) . '/src/' . $boundary;
 		$this->assertDirectoryDoesNotExist( $path );
+	}
+
+	public function test_authorized_sc_m01_boundaries_exist(): void {
+		$root = dirname( __DIR__, 3 ) . '/src/';
+		$this->assertDirectoryExists( $root . 'Conversations' );
+		$this->assertDirectoryExists( $root . 'ChannelContract' );
 	}
 }

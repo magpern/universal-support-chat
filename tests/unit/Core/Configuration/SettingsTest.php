@@ -15,6 +15,9 @@ final class SettingsTest extends TestCase {
 		$defaults = $settings->defaults();
 
 		$this->assertFalse( $defaults['remove_data_on_uninstall'] );
+		$this->assertSame( 30, $defaults['conversation_inactive_days'] );
+		$this->assertSame( 30, $defaults['conversation_archived_body_days'] );
+		$this->assertSame( 90, $defaults['conversation_purge_days'] );
 	}
 
 	public function test_sanitize_coerces_truthy_flag(): void {
@@ -29,5 +32,21 @@ final class SettingsTest extends TestCase {
 		$result   = $settings->sanitize( 'nope' );
 
 		$this->assertFalse( $result['remove_data_on_uninstall'] );
+		$this->assertSame( 30, $result['conversation_inactive_days'] );
+	}
+
+	public function test_sanitize_rejects_non_positive_retention_days(): void {
+		$settings = new Settings();
+		$result   = $settings->sanitize(
+			array(
+				'conversation_inactive_days'      => 0,
+				'conversation_archived_body_days' => -5,
+				'conversation_purge_days'         => 'nope',
+			)
+		);
+
+		$this->assertSame( 30, $result['conversation_inactive_days'] );
+		$this->assertSame( 30, $result['conversation_archived_body_days'] );
+		$this->assertSame( 90, $result['conversation_purge_days'] );
 	}
 }
