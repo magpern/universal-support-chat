@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned. **Blocked on implementation** until [ADR-0007](../adr/0007-contract-v1-mutual-signed-adapter-authentication-profile.md) (Contract v1 mutual signed adapter authentication profile) and its corresponding Universal Telegram adapter-documentation amendment are both merged — see [§0 Sequencing amendment](#0-sequencing-amendment-adr-0007) below.
+Planned. **Work package 0 (Support Chat's authenticated Contract server) implemented** — see closure: `docs/closure/sc-m03-work-package-0-contract-server-closure.md`. **Migration/cutover implementation remains blocked** until work packages 1–3 (Universal Telegram's signed Contract client and joint interoperability tests) are also complete — see [§0 Sequencing amendment](#0-sequencing-amendment-adr-0007) below.
 
 Depends on: SC-M02; **UT Adapter M1** (binding table must exist); **ADR-0007** (authenticated Contract server design)
 
@@ -18,7 +18,7 @@ UT Adapter M1 shipped with every adapter → Support Chat Contract call delibera
 
 SC-M03 implementation is split and ordered as follows (frozen plan: [v2](../plans/sc-m03-controlled-migration-and-cutover-plan-v2.md), superseding [v1](../plans/sc-m03-controlled-migration-and-cutover-plan-v1.md)):
 
-1. Support Chat's authenticated Contract server and pairing/replay authority (ADR-0007).
+1. **Implemented.** Support Chat's authenticated Contract server and pairing/replay authority (ADR-0007) — closure: `docs/closure/sc-m03-work-package-0-contract-server-closure.md`.
 2. Universal Telegram's signed Contract client, replacing the current fail-closed stubs — a follow-up slice of UT Adapter M1, documented and implemented in the Universal Telegram repository after this Support Chat ADR merges.
 3. End-to-end authenticated interoperability tests between the two (pairing, rotation, revocation, replay rejection, uniform fail-closed behaviour).
 4. Only then, this charter's one-shot legacy migration engine and controlled cutover orchestration (§Principles, unchanged).

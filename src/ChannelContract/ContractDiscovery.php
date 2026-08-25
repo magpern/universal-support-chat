@@ -1,6 +1,6 @@
 <?php
 /**
- * Inert Contract v1 discovery surface.
+ * Contract v1 discovery surface (ADR-0005 §7, ADR-0007 §3).
  *
  * @package UniversalSupportChat
  */
@@ -9,14 +9,38 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\ChannelContract;
 
+use UniversalSupportChat\ChannelContract\Auth\ContractIdentity;
+use UniversalSupportChat\ChannelContract\Auth\ContractOperations;
+use UniversalSupportChat\ChannelContract\Auth\PeerRepository;
 use WP_REST_Response;
 
 /**
- * Advertises Contract v1 capabilities without invoking any adapter.
+ * Advertises Contract v1 capabilities truthfully: `channel_available`
+ * reflects whether at least one peer is actually paired and usable, and
+ * `operations` reflects only the operations that peer(s) are actually
+ * permitted to call — never a fixed catalog regardless of pairing state.
+ * Unauthenticated and safe: no internal detail is exposed beyond the
+ * boolean/array fields below (ADR-0007 §3).
  */
 final class ContractDiscovery {
 
 	public const CONTRACT_VERSION_ID = 'support-channel-contract/v1';
+
+	/**
+	 * Peer key store.
+	 *
+	 * @var PeerRepository
+	 */
+	private PeerRepository $peers;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param PeerRepository $peers Peer key store.
+	 */
+	public function __construct( PeerRepository $peers ) {
+		$this->peers = $peers;
+	}
 
 	/**
 	 * Registers WordPress hooks.
@@ -41,30 +65,32 @@ final class ContractDiscovery {
 	}
 
 	/**
-	 * Returns inert Contract v1 discovery metadata.
+	 * Returns truthful Contract v1 discovery metadata. Never reveals which
+	 * peer (if any) is paired, only the aggregate availability/operations.
 	 */
 	public function handle_discover(): WP_REST_Response {
+		$operations = array();
+
+		foreach ( $this->peers->list_all() as $peer ) {
+			if ( ! $peer->is_usable() ) {
+				continue;
+			}
+
+			foreach ( $peer->allowed_operations() as $operation ) {
+				if ( in_array( $operation, ContractOperations::ADAPTER_TO_SUPPORT_CHAT, true ) && ! in_array( $operation, $operations, true ) ) {
+					$operations[] = $operation;
+				}
+			}
+		}
+
 		return new WP_REST_Response(
 			array(
 				'ok'                => true,
 				'contract_version'  => self::CONTRACT_VERSION_ID,
+				'auth_profile'      => ContractIdentity::AUTH_PROFILE_ID,
 				'adapter_required'  => false,
-				'channel_available' => false,
-				'operations'        => array(
-					'ensure_channel_case',
-					'notify_operators',
-					'deliver_transcript_backfill',
-					'deliver_message',
-					'ingest_operator_reply',
-					'claim',
-					'release',
-					'resolve',
-					'reopen',
-					'update_assignment',
-					'update_operator_presence',
-					'report_channel_unavailable',
-					'report_delivery_failure',
-				),
+				'channel_available' => array() !== $operations,
+				'operations'        => $operations,
 			),
 			200
 		);

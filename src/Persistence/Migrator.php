@@ -20,6 +20,9 @@ class Migrator {
 	public const CONVERSATIONS_TABLE         = 'universal_support_chat_conversations';
 	public const CONVERSATION_MESSAGES_TABLE = 'universal_support_chat_conversation_messages';
 	public const CONVERSATION_NOTES_TABLE    = 'universal_support_chat_conversation_notes';
+	public const CHANNEL_PEERS_TABLE         = 'universal_support_chat_channel_peers';
+	public const CONTRACT_NONCES_TABLE       = 'universal_support_chat_contract_nonces';
+	public const CHANNEL_STATUS_TABLE        = 'universal_support_chat_channel_status';
 
 	private const DB_VERSION_OPTION = 'universal_support_chat_db_version';
 
@@ -43,7 +46,7 @@ class Migrator {
 	 * Highest step number this migrator knows how to run.
 	 */
 	protected function target_version(): int {
-		return 4;
+		return 7;
 	}
 
 	/**
@@ -106,6 +109,9 @@ class Migrator {
 			2 => array( array( $this, 'step_2_create_conversations_table' ), array( $this, 'verify_step_2' ) ),
 			3 => array( array( $this, 'step_3_create_conversation_messages_table' ), array( $this, 'verify_step_3' ) ),
 			4 => array( array( $this, 'step_4_create_conversation_notes_table' ), array( $this, 'verify_step_4' ) ),
+			5 => array( array( $this, 'step_5_create_channel_peers_table' ), array( $this, 'verify_step_5' ) ),
+			6 => array( array( $this, 'step_6_create_contract_nonces_table' ), array( $this, 'verify_step_6' ) ),
+			7 => array( array( $this, 'step_7_create_channel_status_table' ), array( $this, 'verify_step_7' ) ),
 		);
 
 		if ( ! isset( $steps[ $number ] ) ) {
@@ -358,6 +364,160 @@ class Migrator {
 				'bot_id',
 				'destination_id',
 			)
+		);
+	}
+
+	/**
+	 * Creates the ADR-0007 peer key store (mutual signed adapter auth).
+	 * Never stores Telegram-native identifiers, only an opaque peer slug.
+	 */
+	private function step_5_create_channel_peers_table(): void {
+		global $wpdb;
+
+		$table           = $wpdb->prefix . self::CHANNEL_PEERS_TABLE;
+		$charset_collate = $wpdb->get_charset_collate();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$table} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				peer_id VARCHAR(191) NOT NULL,
+				public_key VARCHAR(64) NOT NULL,
+				key_id VARCHAR(191) NOT NULL,
+				allowed_operations LONGTEXT NOT NULL,
+				required_peer_capability VARCHAR(191) NULL,
+				status VARCHAR(16) NOT NULL DEFAULT 'active',
+				created_at DATETIME NOT NULL,
+				last_rotated_at DATETIME NULL,
+				last_used_at DATETIME NULL,
+				expires_at DATETIME NULL,
+				revoked_at DATETIME NULL,
+				PRIMARY KEY (id),
+				UNIQUE KEY peer_id (peer_id),
+				UNIQUE KEY key_id (key_id)
+			) {$charset_collate}"
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	/**
+	 * Verifies step 5 columns exist and channel-native columns do not.
+	 */
+	private function verify_step_5(): bool {
+		global $wpdb;
+
+		$table = $wpdb->prefix . self::CHANNEL_PEERS_TABLE;
+		$ok    = $this->table_has_columns(
+			$table,
+			array(
+				'id',
+				'peer_id',
+				'public_key',
+				'key_id',
+				'allowed_operations',
+				'required_peer_capability',
+				'status',
+				'created_at',
+				'last_rotated_at',
+				'last_used_at',
+				'expires_at',
+				'revoked_at',
+			)
+		);
+
+		if ( ! $ok ) {
+			return false;
+		}
+
+		return ! $this->table_has_any_column(
+			$table,
+			array( 'telegram_topic_id', 'bot_id', 'destination_id', 'telegram_bot_token' )
+		);
+	}
+
+	/**
+	 * Creates the ADR-0007 nonce replay store. Holds only the fields the
+	 * ADR permits: sender, key id, nonce, and when it was recorded.
+	 */
+	private function step_6_create_contract_nonces_table(): void {
+		global $wpdb;
+
+		$table           = $wpdb->prefix . self::CONTRACT_NONCES_TABLE;
+		$charset_collate = $wpdb->get_charset_collate();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$table} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				sender VARCHAR(191) NOT NULL,
+				key_id VARCHAR(191) NOT NULL,
+				nonce VARCHAR(64) NOT NULL,
+				recorded_at DATETIME NOT NULL,
+				PRIMARY KEY (id),
+				UNIQUE KEY sender_key_nonce (sender, key_id, nonce),
+				KEY recorded_at (recorded_at)
+			) {$charset_collate}"
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	/**
+	 * Verifies step 6 columns exist.
+	 */
+	private function verify_step_6(): bool {
+		global $wpdb;
+
+		return $this->table_has_columns(
+			$wpdb->prefix . self::CONTRACT_NONCES_TABLE,
+			array( 'id', 'sender', 'key_id', 'nonce', 'recorded_at' )
+		);
+	}
+
+	/**
+	 * Creates the per-conversation channel status table (ADR-0005 §3:
+	 * Support Chat stores only the opaque reference plus channel status
+	 * derived from adapter callbacks).
+	 */
+	private function step_7_create_channel_status_table(): void {
+		global $wpdb;
+
+		$table           = $wpdb->prefix . self::CHANNEL_STATUS_TABLE;
+		$charset_collate = $wpdb->get_charset_collate();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$table} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				conversation_id BIGINT UNSIGNED NOT NULL,
+				status VARCHAR(16) NOT NULL DEFAULT 'available',
+				reason_code VARCHAR(64) NULL,
+				updated_at DATETIME NOT NULL,
+				PRIMARY KEY (id),
+				UNIQUE KEY conversation_id (conversation_id)
+			) {$charset_collate}"
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	/**
+	 * Verifies step 7 columns exist and channel-native columns do not.
+	 */
+	private function verify_step_7(): bool {
+		global $wpdb;
+
+		$table = $wpdb->prefix . self::CHANNEL_STATUS_TABLE;
+		$ok    = $this->table_has_columns(
+			$table,
+			array( 'id', 'conversation_id', 'status', 'reason_code', 'updated_at' )
+		);
+
+		if ( ! $ok ) {
+			return false;
+		}
+
+		return ! $this->table_has_any_column(
+			$table,
+			array( 'telegram_topic_id', 'telegram_message_id', 'bot_id', 'destination_id' )
 		);
 	}
 

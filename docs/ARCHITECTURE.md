@@ -25,7 +25,7 @@ See [ADR-0002](adr/0002-plugin-identity-and-ownership-boundaries.md).
 | ChatWidget | `UniversalSupportChat\ChatWidget` | Implemented (SC-M02: minimal visitor widget) |
 | Availability | — | Not authorized until SC-M06 |
 | AI | — | Not authorized until SC-AI1 |
-| ChannelContract | `UniversalSupportChat\ChannelContract` | Inert Contract v1 discovery stub (SC-M01; no adapter calls) |
+| ChannelContract | `UniversalSupportChat\ChannelContract` | SC-M03 work package 0: authenticated Contract v1 server (ADR-0007) — peer key store, nonce replay store, signature verification, pairing admin UI, truthful discovery. No adapter is paired by default; no migration/cutover code. |
 
 Channel adapters (e.g. Universal Telegram) are **external plugins**, not boundaries inside this repository. A structural unit test forbids premature `src/` directories for unauthorized boundaries.
 
@@ -69,10 +69,10 @@ SC-AI1 precedes SC-AI2.
 
 ## Versioning conventions
 
-- Plugin SemVer: `UNIVERSAL_SUPPORT_CHAT_VERSION` — **`0.2.0`** at SC-M02 (`0.1.0` at SC-M01).
-- Independent integer schema version option `universal_support_chat_db_version` — target **`4`** at SC-M02 (1=audit, 2=conversations, 3=messages, 4=notes).
+- Plugin SemVer: `UNIVERSAL_SUPPORT_CHAT_VERSION` — **`0.3.0`** at SC-M03 work package 0 (`0.2.0` at SC-M02, `0.1.0` at SC-M01).
+- Independent integer schema version option `universal_support_chat_db_version` — target **`7`** at SC-M03 work package 0 (1=audit, 2=conversations, 3=messages, 4=notes, 5=channel peers, 6=contract nonces, 7=channel status).
 - No Contract v1 release tag is required for adapter pinning; commit SHA is sufficient.
-- SC-M02 does not create a GitHub Release or version tag.
+- SC-M03 work package 0 does not create a GitHub Release or version tag.
 
 ## Where to look
 
