@@ -76,6 +76,8 @@ final class PairingActions {
 		$public_key               = isset( $_POST['public_key'] ) ? trim( wp_unslash( (string) $_POST['public_key'] ) ) : '';
 		$key_id                   = isset( $_POST['key_id'] ) ? trim( wp_unslash( (string) $_POST['key_id'] ) ) : '';
 		$required_peer_capability = isset( $_POST['required_peer_capability'] ) ? sanitize_key( wp_unslash( (string) $_POST['required_peer_capability'] ) ) : '';
+		$outbound_route_base_raw  = isset( $_POST['outbound_route_base'] ) ? trim( wp_unslash( (string) $_POST['outbound_route_base'] ) ) : '';
+		$outbound_route_base      = '' === $outbound_route_base_raw ? null : $outbound_route_base_raw;
 		$confirm_replace          = ! empty( $_POST['confirm_replace'] );
 		$raw_operations           = isset( $_POST['allowed_operations'] ) && is_array( $_POST['allowed_operations'] )
 			? wp_unslash( $_POST['allowed_operations'] )
@@ -100,7 +102,9 @@ final class PairingActions {
 			$allowed_operations,
 			$required_peer_capability,
 			$confirm_replace,
-			get_current_user_id()
+			get_current_user_id(),
+			null,
+			$outbound_route_base
 		);
 
 		$this->redirect( $result->ok() ? $result->reason() : 'pairing_' . $result->reason() );

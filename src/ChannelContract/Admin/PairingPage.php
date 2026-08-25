@@ -150,6 +150,7 @@ final class PairingPage {
 		echo '<th>' . esc_html__( 'State', 'universal-support-chat' ) . '</th>';
 		echo '<th>' . esc_html__( 'Key ID', 'universal-support-chat' ) . '</th>';
 		echo '<th>' . esc_html__( 'Allowed operations', 'universal-support-chat' ) . '</th>';
+		echo '<th>' . esc_html__( 'Outbound route base', 'universal-support-chat' ) . '</th>';
 		echo '<th>' . esc_html__( 'Last used', 'universal-support-chat' ) . '</th>';
 		echo '<th>' . esc_html__( 'Actions', 'universal-support-chat' ) . '</th>';
 		echo '</tr></thead><tbody>';
@@ -160,6 +161,7 @@ final class PairingPage {
 			echo '<td>' . esc_html( $peer->pairing_state() ) . '</td>';
 			echo '<td><code>' . esc_html( $peer->key_id() ) . '</code></td>';
 			echo '<td>' . esc_html( implode( ', ', $peer->allowed_operations() ) ) . '</td>';
+			echo '<td>' . esc_html( $peer->outbound_route_base() ?? __( 'not configured', 'universal-support-chat' ) ) . '</td>';
 			echo '<td>' . esc_html( $peer->last_used_at() ?? __( 'never', 'universal-support-chat' ) ) . '</td>';
 			echo '<td>';
 			$this->render_peer_action_form( $peer->peer_id(), 'usc_contract_revoke', __( 'Revoke', 'universal-support-chat' ), true );
@@ -230,6 +232,11 @@ final class PairingPage {
 		foreach ( ContractOperations::ADAPTER_TO_SUPPORT_CHAT as $operation ) {
 			echo '<label style="display:block;"><input type="checkbox" name="allowed_operations[]" value="' . esc_attr( $operation ) . '" checked="checked" /> ' . esc_html( $operation ) . '</label>';
 		}
+		echo '</td></tr>';
+
+		echo '<tr><th><label for="usc-outbound-route-base">' . esc_html__( 'Outbound route base (optional)', 'universal-support-chat' ) . '</label></th><td>';
+		echo '<input type="text" id="usc-outbound-route-base" name="outbound_route_base" class="regular-text" placeholder="universal-telegram/v1/support-chat" />';
+		echo '<p class="description">' . esc_html__( 'The adapter\'s registered REST route prefix for Support-Chat-to-adapter calls. Leave blank if this site never calls out to the adapter.', 'universal-support-chat' ) . '</p>';
 		echo '</td></tr>';
 
 		echo '<tr><th></th><td><label><input type="checkbox" name="confirm_replace" value="1" /> ' . esc_html__( 'Replace this peer\'s existing key, if one is already active', 'universal-support-chat' ) . '</label></td></tr>';

@@ -94,6 +94,7 @@ class PeerRepository {
 	 * @param array<int, string> $allowed_operations       Permitted operations.
 	 * @param string|null        $required_peer_capability Required peer capability.
 	 * @param string|null        $expires_at               Expiry (UTC mysql), or null for no expiry.
+	 * @param string|null        $outbound_route_base      Outbound REST route base, or null.
 	 */
 	public function create(
 		string $peer_id,
@@ -101,7 +102,8 @@ class PeerRepository {
 		string $key_id,
 		array $allowed_operations,
 		?string $required_peer_capability,
-		?string $expires_at = null
+		?string $expires_at = null,
+		?string $outbound_route_base = null
 	): ?PeerRecord {
 		if ( ! $this->schema_health->is_available() ) {
 			return null;
@@ -120,8 +122,9 @@ class PeerRepository {
 			'status'                   => PeerRecord::STATUS_ACTIVE,
 			'created_at'               => $now,
 			'expires_at'               => $expires_at,
+			'outbound_route_base'      => $outbound_route_base,
 		);
-		$formats = array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' );
+		$formats = array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' );
 
 		$inserted = $wpdb->insert( $table, $data, $formats );
 
@@ -143,6 +146,7 @@ class PeerRepository {
 	 * @param array<int, string> $allowed_operations       Permitted operations.
 	 * @param string|null        $required_peer_capability Required peer capability.
 	 * @param string|null        $expires_at               Expiry (UTC mysql), or null for no expiry.
+	 * @param string|null        $outbound_route_base      Outbound REST route base, or null.
 	 */
 	public function replace_key(
 		string $peer_id,
@@ -150,7 +154,8 @@ class PeerRepository {
 		string $key_id,
 		array $allowed_operations,
 		?string $required_peer_capability,
-		?string $expires_at = null
+		?string $expires_at = null,
+		?string $outbound_route_base = null
 	): ?PeerRecord {
 		if ( ! $this->schema_health->is_available() ) {
 			return null;
@@ -170,9 +175,10 @@ class PeerRepository {
 				'last_rotated_at'          => current_time( 'mysql', true ),
 				'revoked_at'               => null,
 				'expires_at'               => $expires_at,
+				'outbound_route_base'      => $outbound_route_base,
 			),
 			array( 'peer_id' => $peer_id ),
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' ),
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' ),
 			array( '%s' )
 		);
 
