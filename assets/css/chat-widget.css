@@ -1,0 +1,179 @@
+/**
+ * Universal Support Chat — visitor widget (SC-M02 baseline).
+ * Scoped under .usc-chat to avoid theme collisions.
+ */
+.usc-chat {
+	position: fixed;
+	right: 1rem;
+	bottom: 1rem;
+	z-index: 99999;
+	font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+	font-size: 14px;
+	line-height: 1.4;
+	color: #1a1a1a;
+}
+
+.usc-chat[hidden] {
+	display: none !important;
+}
+
+.usc-chat__launcher {
+	border: 1px solid #1a1a1a;
+	background: #fff;
+	color: #1a1a1a;
+	padding: 0.65rem 1rem;
+	cursor: pointer;
+	border-radius: 2px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.usc-chat__launcher:focus-visible,
+.usc-chat__close:focus-visible,
+.usc-chat__send:focus-visible,
+.usc-chat__input:focus-visible {
+	outline: 2px solid #0b57d0;
+	outline-offset: 2px;
+}
+
+.usc-chat__panel {
+	position: absolute;
+	right: 0;
+	bottom: 3.25rem;
+	width: min(360px, calc(100vw - 2rem));
+	max-height: min(480px, calc(100vh - 6rem));
+	display: flex;
+	flex-direction: column;
+	background: #fff;
+	border: 1px solid #1a1a1a;
+	border-radius: 2px;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.usc-chat__panel[hidden] {
+	display: none !important;
+}
+
+.usc-chat__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	padding: 0.75rem 1rem;
+	border-bottom: 1px solid #d0d0d0;
+}
+
+.usc-chat__title {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 600;
+}
+
+.usc-chat__close {
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+	padding: 0.25rem 0.5rem;
+}
+
+.usc-chat__status {
+	min-height: 1.25rem;
+	padding: 0.35rem 1rem;
+	color: #5c5c5c;
+}
+
+.usc-chat__status.is-error {
+	color: #8b0000;
+}
+
+.usc-chat__messages {
+	flex: 1;
+	overflow-y: auto;
+	padding: 0.5rem 1rem 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+
+.usc-chat__bubble {
+	max-width: 90%;
+}
+
+.usc-chat__bubble--visitor {
+	align-self: flex-end;
+	text-align: right;
+}
+
+.usc-chat__bubble--operator,
+.usc-chat__bubble--system {
+	align-self: flex-start;
+}
+
+.usc-chat__bubble-author {
+	display: block;
+	font-size: 0.75rem;
+	color: #5c5c5c;
+	margin-bottom: 0.15rem;
+}
+
+.usc-chat__bubble-text {
+	display: inline-block;
+	padding: 0.5rem 0.75rem;
+	border: 1px solid #d0d0d0;
+	border-radius: 2px;
+	background: #f7f7f7;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.usc-chat__bubble--visitor .usc-chat__bubble-text {
+	background: #e8f0fe;
+	border-color: #aecbfa;
+}
+
+.usc-chat__form {
+	display: flex;
+	gap: 0.5rem;
+	padding: 0.75rem 1rem;
+	border-top: 1px solid #d0d0d0;
+}
+
+.usc-chat__form[hidden] {
+	display: none !important;
+}
+
+.usc-chat__input {
+	flex: 1;
+	resize: vertical;
+	min-height: 2.5rem;
+	max-height: 6rem;
+	padding: 0.4rem 0.5rem;
+	border: 1px solid #a0a0a0;
+	border-radius: 2px;
+}
+
+.usc-chat__send {
+	border: 1px solid #1a1a1a;
+	background: #1a1a1a;
+	color: #fff;
+	padding: 0.4rem 0.85rem;
+	cursor: pointer;
+	border-radius: 2px;
+	align-self: flex-end;
+}
+
+.usc-chat__send:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.usc-chat__signin {
+	padding: 1rem;
+}
+
+.usc-chat__signin[hidden] {
+	display: none !important;
+}
+
+.usc-chat__signin a {
+	color: #0b57d0;
+}

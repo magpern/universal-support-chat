@@ -18,7 +18,6 @@ final class StructuralBoundariesTest extends TestCase {
 	 */
 	public function unauthorized_boundaries_provider(): array {
 		return array(
-			'ChatWidget'   => array( 'ChatWidget' ),
 			'AI'           => array( 'AI' ),
 			'Telegram'     => array( 'Telegram' ),
 			'Queue'        => array( 'Queue' ),
@@ -37,9 +36,11 @@ final class StructuralBoundariesTest extends TestCase {
 		$this->assertDirectoryDoesNotExist( $path );
 	}
 
-	public function test_authorized_sc_m01_boundaries_exist(): void {
+	public function test_authorized_sc_m02_boundaries_exist(): void {
 		$root = dirname( __DIR__, 3 ) . '/src/';
 		$this->assertDirectoryExists( $root . 'Conversations' );
 		$this->assertDirectoryExists( $root . 'ChannelContract' );
+		$this->assertDirectoryExists( $root . 'ChatWidget' );
+		$this->assertDirectoryExists( $root . 'Administration/Hub' );
 	}
 }

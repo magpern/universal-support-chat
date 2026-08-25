@@ -19,6 +19,7 @@ class Migrator {
 	public const AUDIT_LOG_TABLE             = 'universal_support_chat_audit_log';
 	public const CONVERSATIONS_TABLE         = 'universal_support_chat_conversations';
 	public const CONVERSATION_MESSAGES_TABLE = 'universal_support_chat_conversation_messages';
+	public const CONVERSATION_NOTES_TABLE    = 'universal_support_chat_conversation_notes';
 
 	private const DB_VERSION_OPTION = 'universal_support_chat_db_version';
 
@@ -42,7 +43,7 @@ class Migrator {
 	 * Highest step number this migrator knows how to run.
 	 */
 	protected function target_version(): int {
-		return 3;
+		return 4;
 	}
 
 	/**
@@ -104,6 +105,7 @@ class Migrator {
 			1 => array( array( $this, 'step_1_create_audit_log_table' ), array( $this, 'verify_step_1' ) ),
 			2 => array( array( $this, 'step_2_create_conversations_table' ), array( $this, 'verify_step_2' ) ),
 			3 => array( array( $this, 'step_3_create_conversation_messages_table' ), array( $this, 'verify_step_3' ) ),
+			4 => array( array( $this, 'step_4_create_conversation_notes_table' ), array( $this, 'verify_step_4' ) ),
 		);
 
 		if ( ! isset( $steps[ $number ] ) ) {
@@ -296,6 +298,67 @@ class Migrator {
 		);
 
 		return ! $this->table_has_any_column( $table, $forbidden );
+	}
+
+
+	/**
+	 * Creates Support Chat–owned internal notes table (Hub-only).
+	 */
+	private function step_4_create_conversation_notes_table(): void {
+		global $wpdb;
+
+		$table           = $wpdb->prefix . self::CONVERSATION_NOTES_TABLE;
+		$charset_collate = $wpdb->get_charset_collate();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$table} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				conversation_id BIGINT UNSIGNED NOT NULL,
+				operator_user_id BIGINT UNSIGNED NOT NULL,
+				note_uuid CHAR(36) NOT NULL,
+				body_ciphertext LONGTEXT NOT NULL,
+				created_at DATETIME NOT NULL,
+				PRIMARY KEY (id),
+				UNIQUE KEY note_uuid (note_uuid),
+				KEY conversation_id (conversation_id)
+			) {$charset_collate}"
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	/**
+	 * Verifies step 4 columns exist and channel-native columns do not.
+	 */
+	private function verify_step_4(): bool {
+		global $wpdb;
+
+		$table = $wpdb->prefix . self::CONVERSATION_NOTES_TABLE;
+		$ok    = $this->table_has_columns(
+			$table,
+			array(
+				'id',
+				'conversation_id',
+				'operator_user_id',
+				'note_uuid',
+				'body_ciphertext',
+				'created_at',
+			)
+		);
+
+		if ( ! $ok ) {
+			return false;
+		}
+
+		return ! $this->table_has_any_column(
+			$table,
+			array(
+				'telegram_message_id',
+				'telegram_topic_id',
+				'bot_id',
+				'destination_id',
+			)
+		);
 	}
 
 	/**

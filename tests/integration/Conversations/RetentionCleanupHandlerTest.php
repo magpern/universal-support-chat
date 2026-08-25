@@ -10,6 +10,7 @@ use UniversalSupportChat\Audit\AuditLogRepository;
 use UniversalSupportChat\Conversations\ConversationRepository;
 use UniversalSupportChat\Conversations\ConversationStatus;
 use UniversalSupportChat\Conversations\MessageRepository;
+use UniversalSupportChat\Conversations\NoteRepository;
 use UniversalSupportChat\Conversations\RetentionCleanupHandler;
 use UniversalSupportChat\Core\Configuration\Settings;
 use UniversalSupportChat\Core\Security\CredentialVault;
@@ -41,7 +42,7 @@ final class RetentionCleanupHandlerTest extends WP_UnitTestCase {
 		$conversations = new ConversationRepository( $health );
 		$messages      = new MessageRepository( $health, new CredentialVault() );
 		$audit         = new AuditLogger( $health, new Redactor() );
-		$handler       = new RetentionCleanupHandler( $conversations, $messages, new Settings(), $audit );
+		$handler       = new RetentionCleanupHandler( $conversations, $messages, new NoteRepository( $health, new CredentialVault() ), new Settings(), $audit );
 
 		$user_id = self::factory()->user->create();
 		$created = $conversations->create( $user_id );
@@ -80,6 +81,7 @@ final class RetentionCleanupHandlerTest extends WP_UnitTestCase {
 		$handler       = new RetentionCleanupHandler(
 			$conversations,
 			$messages,
+			new NoteRepository( $health, new CredentialVault() ),
 			new Settings(),
 			new AuditLogger( $health, new Redactor() )
 		);

@@ -39,7 +39,8 @@ final class Settings {
 	 *   remove_data_on_uninstall: bool,
 	 *   conversation_inactive_days: int,
 	 *   conversation_archived_body_days: int,
-	 *   conversation_purge_days: int
+	 *   conversation_purge_days: int,
+	 *   widget_enabled: bool
 	 * }
 	 */
 	public function defaults(): array {
@@ -48,6 +49,7 @@ final class Settings {
 			'conversation_inactive_days'      => 30,
 			'conversation_archived_body_days' => 30,
 			'conversation_purge_days'         => 90,
+			'widget_enabled'                  => true,
 		);
 	}
 
@@ -58,7 +60,8 @@ final class Settings {
 	 *   remove_data_on_uninstall: bool,
 	 *   conversation_inactive_days: int,
 	 *   conversation_archived_body_days: int,
-	 *   conversation_purge_days: int
+	 *   conversation_purge_days: int,
+	 *   widget_enabled: bool
 	 * }
 	 */
 	public function get(): array {
@@ -80,7 +83,8 @@ final class Settings {
 	 *   remove_data_on_uninstall: bool,
 	 *   conversation_inactive_days: int,
 	 *   conversation_archived_body_days: int,
-	 *   conversation_purge_days: int
+	 *   conversation_purge_days: int,
+	 *   widget_enabled: bool
 	 * }
 	 */
 	public function sanitize( $input ): array {
@@ -95,6 +99,9 @@ final class Settings {
 			'conversation_inactive_days'      => $this->positive_int( $input['conversation_inactive_days'] ?? null, $defaults['conversation_inactive_days'] ),
 			'conversation_archived_body_days' => $this->positive_int( $input['conversation_archived_body_days'] ?? null, $defaults['conversation_archived_body_days'] ),
 			'conversation_purge_days'         => $this->positive_int( $input['conversation_purge_days'] ?? null, $defaults['conversation_purge_days'] ),
+			'widget_enabled'                  => array_key_exists( 'widget_enabled', $input )
+				? ! empty( $input['widget_enabled'] )
+				: $defaults['widget_enabled'],
 		);
 	}
 

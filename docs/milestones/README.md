@@ -8,7 +8,7 @@ This registry reflects runtime progress after SC-M00/SC-M01.
 |---|---|---|---|---|---|
 | SC-M00 | Foundation | [sc-m00-foundation.md](sc-m00-foundation.md) | Closed (PASS) | none | — |
 | SC-M01 | Conversation System of Record | [sc-m01-conversation-system-of-record.md](sc-m01-conversation-system-of-record.md) | Closed (PASS) | SC-M00 | R1 |
-| SC-M02 | Widget and WordPress Hub Replies | [sc-m02-widget-and-hub-replies.md](sc-m02-widget-and-hub-replies.md) | Planned | SC-M01 | R5 |
+| SC-M02 | Widget and WordPress Hub Replies | [sc-m02-widget-and-hub-replies.md](sc-m02-widget-and-hub-replies.md) | Closed (PASS) | SC-M01 | R5 |
 | UT Adapter M1 | Universal Telegram Support Chat Adapter | [ut-adapter-m1-universal-telegram-support-chat-adapter.md](ut-adapter-m1-universal-telegram-support-chat-adapter.md) | Planned (external repo) | Contract v1 (ADR-0005); SC-M01/M02 surfaces as needed | R1 |
 | SC-M03 | Controlled Migration and Cutover | [sc-m03-controlled-migration-and-cutover.md](sc-m03-controlled-migration-and-cutover.md) | Planned | SC-M02; UT Adapter M1 | ADR-0004 |
 | SC-M04 | Telegram-Optional Acceptance | [sc-m04-telegram-optional-acceptance.md](sc-m04-telegram-optional-acceptance.md) | Planned | SC-M03 | R1, R7 |

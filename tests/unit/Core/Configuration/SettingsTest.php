@@ -18,6 +18,7 @@ final class SettingsTest extends TestCase {
 		$this->assertSame( 30, $defaults['conversation_inactive_days'] );
 		$this->assertSame( 30, $defaults['conversation_archived_body_days'] );
 		$this->assertSame( 90, $defaults['conversation_purge_days'] );
+		$this->assertTrue( $defaults['widget_enabled'] );
 	}
 
 	public function test_sanitize_coerces_truthy_flag(): void {

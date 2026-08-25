@@ -36,6 +36,13 @@ final class RetentionCleanupHandler {
 	private MessageRepository $messages;
 
 	/**
+	 * Note repository.
+	 *
+	 * @var NoteRepository
+	 */
+	private NoteRepository $notes;
+
+	/**
 	 * Plugin settings.
 	 *
 	 * @var Settings
@@ -54,17 +61,20 @@ final class RetentionCleanupHandler {
 	 *
 	 * @param ConversationRepository $conversations Conversation repository.
 	 * @param MessageRepository      $messages      Message repository.
+	 * @param NoteRepository         $notes         Note repository.
 	 * @param Settings               $settings      Plugin settings.
 	 * @param AuditLogger            $audit         Audit logger.
 	 */
 	public function __construct(
 		ConversationRepository $conversations,
 		MessageRepository $messages,
+		NoteRepository $notes,
 		Settings $settings,
 		AuditLogger $audit
 	) {
 		$this->conversations = $conversations;
 		$this->messages      = $messages;
+		$this->notes         = $notes;
 		$this->settings      = $settings;
 		$this->audit         = $audit;
 	}
@@ -138,6 +148,7 @@ final class RetentionCleanupHandler {
 			++$purged;
 			if ( ! $dry_run ) {
 				$this->messages->delete_for_conversation( $conversation->id() );
+				$this->notes->delete_for_conversation( $conversation->id() );
 				$this->conversations->delete_by_id( $conversation->id() );
 			}
 		}

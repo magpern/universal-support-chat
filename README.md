@@ -6,7 +6,7 @@ Self-contained WordPress support-chat plugin: website widget, conversations, tic
 
 ## Status
 
-**SC-M01 Conversation System of Record** — conversations/messages persistence, authenticated visitor REST, retention, and inert Contract v1 discovery. Widget/Hub UI arrives in SC-M02.
+**SC-M02 Widget and Hub Replies** — minimal authenticated visitor widget and WordPress Hub inbox with Support-team replies. Works without Universal Telegram.
 
 ## Requirements
 

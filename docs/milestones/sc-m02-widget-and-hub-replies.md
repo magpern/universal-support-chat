@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Closed (PASS) — see `docs/closure/sc-m02-widget-and-hub-replies-closure.md`.
 
 Depends on: SC-M01
 
