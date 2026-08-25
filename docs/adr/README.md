@@ -14,8 +14,9 @@
 | 0004 | Migration and retention principles |
 | 0005 | Canonical Support Channel Contract v1 |
 | 0006 | Optional channel and adapter failure model |
+| 0007 | Contract v1 mutual signed adapter authentication profile |
 
-The next available number for any future ADR is **0007**.
+The next available number for any future ADR is **0008**.
 
 ## Immutability
 
@@ -44,3 +45,4 @@ Architecture or composition pattern; a security boundary; a persistence model; a
 - [ADR-0004 — Migration and retention principles](0004-migration-and-retention-principles.md)
 - [ADR-0005 — Canonical Support Channel Contract v1](0005-canonical-support-channel-contract-v1.md)
 - [ADR-0006 — Optional channel and adapter failure model](0006-optional-channel-and-adapter-failure-model.md)
+- [ADR-0007 — Contract v1 mutual signed adapter authentication profile](0007-contract-v1-mutual-signed-adapter-authentication-profile.md)
