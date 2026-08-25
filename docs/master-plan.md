@@ -58,6 +58,7 @@ A human request **always** creates a durable Support Chat ticket with truthful o
 - **Human control before autonomy** — SC-AI1 before SC-AI2.
 - **No dual-write migration** — [ADR-0004](adr/0004-migration-and-retention-principles.md).
 - **No companion server**.
+- **Mutually authenticated Contract calls** — [ADR-0007](adr/0007-contract-v1-mutual-signed-adapter-authentication-profile.md): mutual Ed25519 request signing between Support Chat and each adapter; no shared secret, no bare user-context call, no public mutation bypass.
 
 ## 4. Relationship to Universal Telegram
 
@@ -73,7 +74,7 @@ A human request **always** creates a durable Support Chat ticket with truthful o
 | 2 | [SC-M01](milestones/sc-m01-conversation-system-of-record.md) | Conversations SoR, retention, visitor REST; no Telegram; no AI | R1 baseline |
 | 3 | [SC-M02](milestones/sc-m02-widget-and-hub-replies.md) | Widget baseline, Hub inbox, first-class Hub reply; no Telegram; no AI | R5 Hub path |
 | 4 | [UT Adapter M1](milestones/ut-adapter-m1-universal-telegram-support-chat-adapter.md) | **In Universal Telegram repo** after Contract v1: client, binding table, inbound/outbound, compliance | R1 channel |
-| 5 | [SC-M03](milestones/sc-m03-controlled-migration-and-cutover.md) | Quiesced one-shot migration; bindings for existing topics | ADR-0004 |
+| 5 | [SC-M03](milestones/sc-m03-controlled-migration-and-cutover.md) | Authenticated Contract server (ADR-0007), then quiesced one-shot migration; bindings for existing topics | ADR-0004, ADR-0007 |
 | 6 | [SC-M04](milestones/sc-m04-telegram-optional-acceptance.md) | Prove SC with adapter absent/unavailable | R1, R7 |
 | 7 | [SC-M05](milestones/sc-m05-professional-widget-experience.md) | Professional launcher and greeting | R2, R3 |
 | 8 | [SC-M06](milestones/sc-m06-support-availability-and-offline-tickets.md) | Hours, status, offline tickets | R5, R7 |

@@ -34,7 +34,8 @@ This foundation documentation freeze includes boundary plans for the initial roa
 | [sc-m01-conversation-system-of-record-plan-v1.md](sc-m01-conversation-system-of-record-plan-v1.md) | SC-M01 |
 | [sc-m02-widget-and-hub-replies-plan-v1.md](sc-m02-widget-and-hub-replies-plan-v1.md) | SC-M02 |
 | [ut-adapter-m1-dependency-plan-v1.md](ut-adapter-m1-dependency-plan-v1.md) | UT Adapter M1 (external) |
-| [sc-m03-controlled-migration-and-cutover-plan-v1.md](sc-m03-controlled-migration-and-cutover-plan-v1.md) | SC-M03 |
+| ~~[sc-m03-controlled-migration-and-cutover-plan-v1.md](sc-m03-controlled-migration-and-cutover-plan-v1.md)~~ (superseded) | SC-M03 |
+| [sc-m03-controlled-migration-and-cutover-plan-v2.md](sc-m03-controlled-migration-and-cutover-plan-v2.md) | SC-M03 (current; ADR-0007 sequencing) |
 | [sc-m04-telegram-optional-acceptance-plan-v1.md](sc-m04-telegram-optional-acceptance-plan-v1.md) | SC-M04 |
 | [sc-m05-professional-widget-experience-plan-v1.md](sc-m05-professional-widget-experience-plan-v1.md) | SC-M05 |
 | [sc-m06-support-availability-and-offline-tickets-plan-v1.md](sc-m06-support-availability-and-offline-tickets-plan-v1.md) | SC-M06 |

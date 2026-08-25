@@ -10,7 +10,7 @@ This registry reflects runtime progress after SC-M00/SC-M01.
 | SC-M01 | Conversation System of Record | [sc-m01-conversation-system-of-record.md](sc-m01-conversation-system-of-record.md) | Closed (PASS) | SC-M00 | R1 |
 | SC-M02 | Widget and WordPress Hub Replies | [sc-m02-widget-and-hub-replies.md](sc-m02-widget-and-hub-replies.md) | Closed (PASS) | SC-M01 | R5 |
 | UT Adapter M1 | Universal Telegram Support Chat Adapter | [ut-adapter-m1-universal-telegram-support-chat-adapter.md](ut-adapter-m1-universal-telegram-support-chat-adapter.md) | Planned (external repo) | Contract v1 (ADR-0005); SC-M01/M02 surfaces as needed | R1 |
-| SC-M03 | Controlled Migration and Cutover | [sc-m03-controlled-migration-and-cutover.md](sc-m03-controlled-migration-and-cutover.md) | Planned | SC-M02; UT Adapter M1 | ADR-0004 |
+| SC-M03 | Controlled Migration and Cutover | [sc-m03-controlled-migration-and-cutover.md](sc-m03-controlled-migration-and-cutover.md) | Planned (blocked on ADR-0007 + UT adapter doc amendment) | SC-M02; UT Adapter M1; ADR-0007 | ADR-0004, ADR-0007 |
 | SC-M04 | Telegram-Optional Acceptance | [sc-m04-telegram-optional-acceptance.md](sc-m04-telegram-optional-acceptance.md) | Planned | SC-M03 | R1, R7 |
 | SC-M05 | Professional Widget Experience | [sc-m05-professional-widget-experience.md](sc-m05-professional-widget-experience.md) | Planned | SC-M02 | R2, R3 |
 | SC-M06 | Support Availability and Offline Tickets | [sc-m06-support-availability-and-offline-tickets.md](sc-m06-support-availability-and-offline-tickets.md) | Planned | SC-M02; soft SC-M04 | R5, R7 |
@@ -21,6 +21,7 @@ This registry reflects runtime progress after SC-M00/SC-M01.
 
 1. SC-M00 → SC-M01 → SC-M02  
 2. UT Adapter M1 (Universal Telegram repository)  
+2a. ADR-0007 authenticated Contract server (Support Chat) + Universal Telegram signed-client follow-up slice (external repo) + end-to-end authenticated interoperability proof  
 3. SC-M03 → SC-M04  
 4. SC-M05, SC-M06, SC-AI1, then SC-AI2  
 

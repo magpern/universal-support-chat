@@ -44,9 +44,13 @@ Do not maintain a second full copy of Contract v1 in another repository.
 
 [ADR-0006](adr/0006-optional-channel-and-adapter-failure-model.md): fail closed for the channel only; Hub and website chat continue.
 
+## Contract v1 authentication
+
+[ADR-0007](adr/0007-contract-v1-mutual-signed-adapter-authentication-profile.md): mutual Ed25519 request signing between Support Chat and each adapter — separate key pairs, administrator-authorized pairing, no shared secret, no bare `rest_do_request()` context, no public mutation bypass. Fixes the mechanism ADR-0005 §5 requires but leaves unspecified. SC-M03's authenticated Contract server and Universal Telegram's signed Contract client both implement against this ADR; neither existed before it.
+
 ## Migration
 
-[ADR-0004](adr/0004-migration-and-retention-principles.md): no dual-write; quiesced one-shot cutover; UT Adapter M1 before SC-M03.
+[ADR-0004](adr/0004-migration-and-retention-principles.md): no dual-write; quiesced one-shot cutover; UT Adapter M1 before SC-M03. SC-M03 implementation additionally requires ADR-0007's authenticated Contract server before the migration/cutover engine itself — see the [SC-M03 charter](milestones/sc-m03-controlled-migration-and-cutover.md) sequencing amendment.
 
 ## Security and privacy
 
@@ -56,6 +60,7 @@ Do not maintain a second full copy of Contract v1 in another repository.
 
 1. SC-M00 → SC-M01 → SC-M02
 2. **UT Adapter M1** (Universal Telegram repository; after Contract v1 exists)
+2a. **ADR-0007 authenticated Contract server** (Support Chat) and its Universal Telegram signed-client follow-up slice — required before SC-M03 code (see [ADR-0007](adr/0007-contract-v1-mutual-signed-adapter-authentication-profile.md))
 3. SC-M03 (migration/cutover)
 4. SC-M04 (telegram-optional acceptance)
 5. SC-M05, SC-M06, **SC-AI1**, then **SC-AI2**
