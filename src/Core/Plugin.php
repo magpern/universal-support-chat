@@ -9,12 +9,18 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Core;
 
+use UniversalSupportChat\Administration\Conversations\ConversationDetailPage;
+use UniversalSupportChat\Administration\Conversations\ConversationInboxPage;
+use UniversalSupportChat\Administration\Conversations\HubActions;
 use UniversalSupportChat\Administration\Diagnostics\DiagnosticsPage;
+use UniversalSupportChat\Administration\Hub\HubPage;
 use UniversalSupportChat\Audit\AuditLogger;
 use UniversalSupportChat\Audit\AuditLogRepository;
 use UniversalSupportChat\ChannelContract\ContractDiscovery;
+use UniversalSupportChat\ChatWidget\WidgetAssets;
 use UniversalSupportChat\Conversations\ConversationRepository;
 use UniversalSupportChat\Conversations\MessageRepository;
+use UniversalSupportChat\Conversations\NoteRepository;
 use UniversalSupportChat\Conversations\Rest\ConversationsController;
 use UniversalSupportChat\Conversations\RetentionCleanupHandler;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
@@ -99,13 +105,20 @@ final class Plugin {
 
 		$conversations = new ConversationRepository( $schema_health );
 		$messages      = new MessageRepository( $schema_health, $vault );
+		$notes         = new NoteRepository( $schema_health, $vault );
 
 		$settings->register();
 
 		( new DiagnosticsPage( $schema_health, $audit_repo, $vault ) )->register();
 		( new ConversationsController( $schema_health, $conversations, $messages ) )->register();
-		( new RetentionCleanupHandler( $conversations, $messages, $settings, $audit ) )->register();
+		( new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit ) )->register();
 		( new ContractDiscovery() )->register();
+
+		$inbox  = new ConversationInboxPage( $schema_health, $conversations );
+		$detail = new ConversationDetailPage( $schema_health, $conversations, $messages, $notes );
+		( new HubPage( $inbox, $detail ) )->register();
+		( new HubActions( $schema_health, $conversations, $messages, $notes, $audit ) )->register();
+		( new WidgetAssets( $settings, $schema_health ) )->register();
 
 		unset( $caps );
 	}

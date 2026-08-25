@@ -283,6 +283,9 @@ final class ConversationsController {
 				'id'             => $message->id(),
 				'message_uuid'   => $message->uuid(),
 				'direction'      => $message->direction(),
+				'author_label'   => ConversationMessage::DIRECTION_VISITOR === $message->direction()
+					? 'You'
+					: 'Support team',
 				'text'           => $message->plaintext_body(),
 				'created_at'     => $message->created_at(),
 				'delivery_state' => $message->delivery_state(),
