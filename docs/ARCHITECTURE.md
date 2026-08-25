@@ -21,11 +21,11 @@ See [ADR-0002](adr/0002-plugin-identity-and-ownership-boundaries.md).
 | Privacy | `UniversalSupportChat\Privacy` | Implemented (classification, redactor) |
 | Audit | `UniversalSupportChat\Audit` | Implemented (audit logger + repository; audit log table) |
 | Administration | `UniversalSupportChat\Administration` | Implemented (`Diagnostics` subdomain only) |
-| Conversations | — | Not authorized until SC-M01 |
+| Conversations | `UniversalSupportChat\Conversations` | Implemented (SC-M01: SoR, visitor REST, retention) |
 | ChatWidget | — | Not authorized until SC-M02 |
 | Availability | — | Not authorized until SC-M06 |
 | AI | — | Not authorized until SC-AI1 |
-| ChannelContract | — | Server surface later; Contract v1 docs exist |
+| ChannelContract | `UniversalSupportChat\ChannelContract` | Inert Contract v1 discovery stub (SC-M01; no adapter calls) |
 
 Channel adapters (e.g. Universal Telegram) are **external plugins**, not boundaries inside this repository. A structural unit test forbids premature `src/` directories for unauthorized boundaries.
 
@@ -64,10 +64,10 @@ SC-AI1 precedes SC-AI2.
 
 ## Versioning conventions
 
-- Plugin SemVer: `UNIVERSAL_SUPPORT_CHAT_VERSION` — **`0.0.1`** at SC-M00.
-- Independent integer schema version option `universal_support_chat_db_version` — target **`1`** at SC-M00 (audit log table only).
+- Plugin SemVer: `UNIVERSAL_SUPPORT_CHAT_VERSION` — **`0.1.0`** at SC-M01 (`0.0.1` at SC-M00).
+- Independent integer schema version option `universal_support_chat_db_version` — target **`3`** at SC-M01 (1=audit, 2=conversations, 3=messages).
 - No Contract v1 release tag is required for adapter pinning; commit SHA is sufficient.
-- SC-M00 does not create a GitHub Release or version tag.
+- SC-M01 does not create a GitHub Release or version tag.
 
 ## Where to look
 
