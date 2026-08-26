@@ -456,6 +456,59 @@ final class PhaseABackfillServiceTest extends WP_UnitTestCase {
 		$this->assertSame( 100, end( $calls )['after'] );
 	}
 
+	public function test_a_request_above_100_does_not_stop_after_the_first_100_row_ut_response(): void {
+		// Universal Telegram's own LegacyExportServiceV1 never returns more
+		// than 100 rows per call, regardless of what is requested
+		// (ADR-0008 §5; FakeLegacyExportClient mirrors this). Requesting
+		// 500 with 150 rows actually available must still process all 150
+		// within this single run() call, across two internal batches of
+		// 100 + 50 — not stop after the first 100 because 100 < 500 looks
+		// "short" against the raw requested size.
+		for ( $id = 1; $id <= 150; $id++ ) {
+			$this->export_client->seed( $this->entry( $id ) );
+		}
+
+		$result = $this->service()->run( false, 500 );
+
+		$this->assertSame( 150, $result['processed'] );
+		$this->assertSame( 150, $result['backfilled'] );
+		$this->assertSame( 2, $result['batches'] );
+
+		foreach ( $this->export_client->calls() as $call ) {
+			$this->assertSame( 100, $call['limit'], 'Every call must use the effective (capped) batch size, never the raw requested value.' );
+		}
+
+		$this->assertNotNull( $this->map->find_by_source_id( 1 ) );
+		$this->assertNotNull( $this->map->find_by_source_id( 150 ) );
+	}
+
+	public function test_effective_batch_size_is_clamped_for_dry_run_too(): void {
+		for ( $id = 1; $id <= 150; $id++ ) {
+			$this->export_client->seed( $this->entry( $id ) );
+		}
+
+		$result = $this->service()->run( true, 500 );
+
+		$this->assertSame( 150, $result['processed'] );
+		$this->assertSame( 2, $result['batches'] );
+
+		foreach ( $this->export_client->calls() as $call ) {
+			$this->assertSame( 100, $call['limit'] );
+		}
+
+		// Still a dry run: nothing was written.
+		$this->assertNull( $this->map->find_by_source_id( 1 ) );
+	}
+
+	public function test_a_batch_size_below_the_minimum_is_clamped_up_not_rejected(): void {
+		$this->export_client->seed( $this->entry( 1 ) );
+
+		$result = $this->service()->run( false, 0 );
+
+		$this->assertSame( 1, $result['processed'] );
+		$this->assertSame( 1, $this->export_client->calls()[0]['limit'] );
+	}
+
 	public function test_per_conversation_transaction_rolls_back_on_forced_failure_leaving_no_map_row(): void {
 		// A conversation whose 'status' is not a recognized
 		// ConversationStatus value forces backfill_writes() to throw after

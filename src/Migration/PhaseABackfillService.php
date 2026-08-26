@@ -34,6 +34,23 @@ final class PhaseABackfillService {
 	private const MAX_BATCHES_PER_RUN = 2000;
 
 	/**
+	 * The hard ceiling Universal Telegram's own `LegacyExportServiceV1`
+	 * enforces server-side on every `export_batch()` call, regardless of
+	 * what is requested (ADR-0008 §5). This engine's own effective batch
+	 * size can never exceed it — requesting more would only ever get back
+	 * at most this many rows per call, so treating a full 100-row response
+	 * to a *larger* request as "short" would stop Phase A early while
+	 * further source rows still exist.
+	 */
+	private const MAX_UT_BATCH_SIZE = 100;
+
+	/**
+	 * The smallest batch size this engine will ever actually request,
+	 * regardless of what the caller passes.
+	 */
+	private const MIN_BATCH_SIZE = 1;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param LegacyExportClient                   $export_client Universal Telegram's export boundary.
@@ -66,13 +83,19 @@ final class PhaseABackfillService {
 	 * would happen.
 	 *
 	 * @param bool     $dry_run            Whether to simulate without writing.
-	 * @param int      $batch_size         Requested export batch size (capped by Universal Telegram at 100).
+	 * @param int      $batch_size         Requested export batch size. Clamped to this engine's own
+	 *                                      effective size — `min( max( $batch_size, 1 ), 100 )` — before
+	 *                                      ever being used, since Universal Telegram's own
+	 *                                      `LegacyExportServiceV1` never returns more than 100 rows per
+	 *                                      call regardless of what is requested (ADR-0008 §5).
 	 * @param int|null $operator_user_id   The invoking operator's WP user id, for the run record only.
 	 *
 	 * @return array{run_id: int|null, dry_run: bool, batches: int, processed: int, backfilled: int, skipped: int, failed: int}
 	 */
 	public function run( bool $dry_run, int $batch_size, ?int $operator_user_id = null ): array {
-		$run_id = $dry_run ? null : $this->runs->start( LegacyMigrationRunRepository::PHASE_BACKFILL, $batch_size, $operator_user_id );
+		$effective_batch_size = min( max( $batch_size, self::MIN_BATCH_SIZE ), self::MAX_UT_BATCH_SIZE );
+
+		$run_id = $dry_run ? null : $this->runs->start( LegacyMigrationRunRepository::PHASE_BACKFILL, $effective_batch_size, $operator_user_id );
 
 		$after_id = $this->map->high_water_mark();
 		$totals   = array(
@@ -87,7 +110,7 @@ final class PhaseABackfillService {
 
 		for ( $batch_number = 1; $batch_number <= self::MAX_BATCHES_PER_RUN; $batch_number++ ) {
 			$cursor_start = $after_id;
-			$export       = $this->export_client->export_batch( $after_id, $batch_size );
+			$export       = $this->export_client->export_batch( $after_id, $effective_batch_size );
 			$entries      = $export['conversations'];
 
 			if ( array() === $entries ) {
@@ -131,9 +154,16 @@ final class PhaseABackfillService {
 				$this->runs->advance_checkpoint( $run_id, $after_id );
 			}
 
-			if ( count( $entries ) < $batch_size ) {
-				// Universal Telegram returned fewer than requested: no more
-				// conversations exist beyond this cursor right now.
+			if ( count( $entries ) < $effective_batch_size ) {
+				// Fewer rows than this engine's own effective request size
+				// came back: no more conversations exist beyond this
+				// cursor right now. Comparing against the *effective*
+				// size (never the raw, possibly-larger, caller-requested
+				// value) is what makes this a correct termination
+				// signal — a full 100-row response to a >100 request is
+				// not "short," it is exactly what Universal Telegram's
+				// own per-call ceiling (ADR-0008 §5) always returns when
+				// more rows remain.
 				break;
 			}
 		}

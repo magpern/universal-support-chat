@@ -59,6 +59,7 @@ final class LegacyMigrationValidator {
 			LegacyFieldMap::DISPOSITION_COPY_CONDITIONAL,
 			LegacyFieldMap::DISPOSITION_REMAP,
 			LegacyFieldMap::DISPOSITION_TRANSFORM_TO_CONSTANT,
+			LegacyFieldMap::DISPOSITION_PRESERVE_FOR_MAP,
 			LegacyFieldMap::DISPOSITION_EXCLUDE,
 		);
 

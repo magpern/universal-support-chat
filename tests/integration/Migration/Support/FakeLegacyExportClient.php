@@ -21,6 +21,17 @@ use UniversalSupportChat\Migration\LegacyExportUnavailableException;
 final class FakeLegacyExportClient implements LegacyExportClient {
 
 	/**
+	 * Mirrors Universal Telegram's own real, server-side
+	 * `LegacyExportServiceV1::MAX_BATCH_SIZE` (ADR-0008 §5) — enforced
+	 * here too, unconditionally, so a regression that ever passes a
+	 * caller-requested size larger than this straight through to
+	 * `export_batch()` is caught by this fake's own behaviour, not just by
+	 * the real Universal Telegram service in the separate dual-plugin
+	 * interop suite.
+	 */
+	private const MAX_BATCH_SIZE = 100;
+
+	/**
 	 * @var array<int, array<string, mixed>>
 	 */
 	private array $conversations = array();
@@ -74,7 +85,7 @@ final class FakeLegacyExportClient implements LegacyExportClient {
 
 		return array(
 			'export_schema_version' => 1,
-			'conversations'         => array_slice( $matching, 0, $limit ),
+			'conversations'         => array_slice( $matching, 0, min( $limit, self::MAX_BATCH_SIZE ) ),
 		);
 	}
 
