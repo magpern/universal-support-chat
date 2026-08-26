@@ -24,6 +24,7 @@ use UniversalSupportChat\Persistence\Migrator;
 use UniversalSupportChat\Persistence\SchemaHealth;
 use UniversalSupportChat\Tests\Integration\Migration\Support\FakeLegacyExportClient;
 use UniversalSupportChat\Tests\Integration\Migration\Support\FakeQuiescenceStateProvider;
+use UniversalSupportChat\Tests\Integration\Migration\Support\QuiescenceLossAfterCallsProvider;
 use WP_UnitTestCase;
 
 final class PhaseBReconciliationServiceTest extends WP_UnitTestCase {
@@ -242,6 +243,71 @@ final class PhaseBReconciliationServiceTest extends WP_UnitTestCase {
 		$result = $this->reconcile_service( ( new FakeQuiescenceStateProvider() )->make_quiescent() )->run( true );
 
 		$this->assertSame( 'ran', $result['status'] );
+
+		$map_row = $this->map->find_by_source_id( 1 );
+		$this->assertSame( LegacyMigrationMapEntry::STATUS_BACKFILLED, $map_row->status() );
+		$this->assertNull( $map_row->validation_passed() );
+	}
+
+	/**
+	 * SC-M03 WP3-4 Phase B continuous quiescence re-check addendum: a
+	 * `QuiescenceStateProvider` that is live-computed (unlike the
+	 * permanent `DefaultDenyQuiescenceStateProvider`) can flip `false`
+	 * between the single check `run()` used to make at entry and a later
+	 * row's own reconciliation. `run()`'s per-row loop-top re-check must
+	 * catch this and refuse before that row is touched, while a row
+	 * already promoted earlier in the same `run()` stays promoted.
+	 */
+	public function test_run_refuses_when_quiescence_is_lost_before_a_later_rows_loop_top_recheck(): void {
+		$this->export_client->seed( $this->entry( 1 ) );
+		$this->export_client->seed( $this->entry( 2 ) );
+		$this->backfill_service()->run( false, 100 );
+
+		// Call sequence for two drift-free rows: top-of-run() (1), row 1's
+		// loop-top re-check (2), row 1's reconcile_one() pre-promotion
+		// re-check (3) — row 1 fully completes and is promoted. Row 2's
+		// loop-top re-check (4) is the first call to see quiescence lost.
+		$quiescence = new QuiescenceLossAfterCallsProvider( 3 );
+
+		$result = $this->reconcile_service( $quiescence )->run( false );
+
+		$this->assertSame( 'refused', $result['status'] );
+		$this->assertSame( PhaseBReconciliationService::REFUSED_NOT_QUIESCENT, $result['reason'] );
+		$this->assertSame( 1, $result['checked'] );
+		$this->assertSame( 1, $result['validated'] );
+		$this->assertSame( 0, $result['failed'] );
+
+		// Row 1 committed before quiescence was lost and remains promoted;
+		// row 2 was never reached.
+		$this->assertSame( LegacyMigrationMapEntry::STATUS_MIGRATED, $this->map->find_by_source_id( 1 )->status() );
+		$this->assertSame( LegacyMigrationMapEntry::STATUS_BACKFILLED, $this->map->find_by_source_id( 2 )->status() );
+	}
+
+	/**
+	 * SC-M03 WP3-4 Phase B continuous quiescence re-check addendum:
+	 * `reconcile_one()` itself must re-check `is_quiescent()` immediately
+	 * before its own promotion-to-`migrated` write, so that a loop-top
+	 * check passing is not stale by the time this row's promotion
+	 * actually commits. When that final re-check fails, this row must not
+	 * be promoted and the whole run must refuse.
+	 */
+	public function test_run_refuses_and_does_not_promote_when_quiescence_is_lost_before_reconcile_ones_own_promotion_write(): void {
+		$this->export_client->seed( $this->entry( 1 ) );
+		$this->backfill_service()->run( false, 100 );
+
+		// Call sequence for one drift-free row: top-of-run() (1), the
+		// row's loop-top re-check (2) — both still true. reconcile_one()'s
+		// own pre-promotion re-check (3) is the first call to see
+		// quiescence lost, so the row's promotion write must not happen.
+		$quiescence = new QuiescenceLossAfterCallsProvider( 2 );
+
+		$result = $this->reconcile_service( $quiescence )->run( false );
+
+		$this->assertSame( 'refused', $result['status'] );
+		$this->assertSame( PhaseBReconciliationService::REFUSED_NOT_QUIESCENT, $result['reason'] );
+		$this->assertSame( 0, $result['checked'] );
+		$this->assertSame( 0, $result['validated'] );
+		$this->assertSame( 0, $result['failed'] );
 
 		$map_row = $this->map->find_by_source_id( 1 );
 		$this->assertSame( LegacyMigrationMapEntry::STATUS_BACKFILLED, $map_row->status() );

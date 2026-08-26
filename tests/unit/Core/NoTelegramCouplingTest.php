@@ -17,19 +17,23 @@ use SplFileInfo;
 final class NoTelegramCouplingTest extends TestCase {
 
 	/**
-	 * The sole, narrow, ADR-0008-authorized exception to this repository's
-	 * "no Universal Telegram coupling" rule: the in-process legacy export
-	 * boundary consumer. `LegacyExportClient` (the interface) and
-	 * `InProcessLegacyExportClient` (its only implementation) are the
-	 * entire cross-plugin reference surface — every other file under
-	 * `src/Migration/`, and everywhere else in `src/`, remains fully
-	 * decoupled and is still checked below.
+	 * The sole, narrow, ADR-0008-authorized exceptions to this
+	 * repository's "no Universal Telegram coupling" rule: the in-process
+	 * legacy export boundary consumer (`LegacyExportClient`, the
+	 * interface, and `InProcessLegacyExportClient`, its only
+	 * implementation), and the in-process quiescence-signal consumer
+	 * (`UniversalTelegramQuiescenceStateProvider`, ADR-0008 §6 /
+	 * `docs/closure/sc-m03-wp3-4-phase-b-continuous-quiescence-recheck-addendum.md`).
+	 * These three files are the entire cross-plugin reference surface —
+	 * every other file under `src/Migration/`, and everywhere else in
+	 * `src/`, remains fully decoupled and is still checked below.
 	 *
 	 * @var array<int, string>
 	 */
 	private const AUTHORIZED_EXCEPTIONS = array(
 		'/src/Migration/LegacyExportClient.php',
 		'/src/Migration/InProcessLegacyExportClient.php',
+		'/src/Migration/UniversalTelegramQuiescenceStateProvider.php',
 	);
 
 	public function test_src_has_no_telegram_or_ut_coupling(): void {
@@ -87,5 +91,35 @@ final class NoTelegramCouplingTest extends TestCase {
 		$this->assertStringContainsString( 'universal_support_chat_conversations', $migrator );
 		$this->assertStringContainsString( 'universal_support_chat_conversation_messages', $migrator );
 		$this->assertStringNotContainsString( 'universal_telegram_', $migrator );
+	}
+
+	/**
+	 * The three files above are deliberately exempted from the broad
+	 * Telegram-coupling scan because ADR-0008 §2/§6 authorizes them to
+	 * reference Universal Telegram's namespace in-process. That
+	 * authorization is narrow: it never extends to reading a
+	 * `universal_telegram_*`-prefixed `$wpdb` table directly (ADR-0008 §5,
+	 * "No permanent cross-plugin SQL access" / ADR-0002's plugin-ownership
+	 * boundary). This test enforces that narrower guarantee specifically
+	 * for the files the broad scan above cannot see — it looks for the
+	 * table prefix inside a PHP string literal (an actual query/identifier
+	 * use), not inside a docblock's backtick-quoted prose disclaiming it
+	 * (every one of these three files' docblocks mentions
+	 * `universal_telegram_*` in exactly that disclaiming way).
+	 */
+	public function test_authorized_exceptions_never_touch_a_universal_telegram_wpdb_table(): void {
+		$project_root = dirname( __DIR__, 3 );
+		$hits         = array();
+
+		foreach ( self::AUTHORIZED_EXCEPTIONS as $exception ) {
+			$path = $project_root . $exception;
+			$code = (string) file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local filesystem scan.
+
+			if ( 1 === preg_match( '/[\'"]universal_telegram_/', $code ) ) {
+				$hits[] = $path;
+			}
+		}
+
+		$this->assertSame( array(), $hits, implode( "\n", $hits ) );
 	}
 }
