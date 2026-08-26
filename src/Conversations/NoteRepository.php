@@ -99,6 +99,60 @@ class NoteRepository {
 	}
 
 	/**
+	 * Inserts a note row with an explicit historical `created_at`,
+	 * encrypting the plaintext body through this plugin's own vault
+	 * immediately before persistence. Used only by the SC-M03 legacy
+	 * migration engine. `$operator_user_id` must already be verified
+	 * non-null by the caller — this table's column is `NOT NULL`; a legacy
+	 * note whose authoring operator was anonymized (a real, observed
+	 * Universal Telegram state) cannot be represented here and must instead
+	 * fail the whole conversation's migration, never be silently coerced to
+	 * a placeholder value.
+	 *
+	 * @param int    $conversation_id  Target conversation primary key.
+	 * @param int    $operator_user_id Copied 1:1 from the legacy row (already verified non-null).
+	 * @param string $plaintext_body   Decrypted legacy plaintext.
+	 * @param string $created_at       Preserved legacy `created_at`.
+	 *
+	 * @return ConversationNote|null Null if the schema/key is unavailable or the write failed.
+	 */
+	public function import_legacy( int $conversation_id, int $operator_user_id, string $plaintext_body, string $created_at ): ?ConversationNote {
+		if ( ! $this->schema_health->is_available() ) {
+			return null;
+		}
+
+		$note_uuid = wp_generate_uuid4();
+
+		try {
+			$ciphertext = $this->vault->encrypt( $plaintext_body, $this->context( $note_uuid ) );
+		} catch ( CredentialUnavailableException $exception ) {
+			return null;
+		}
+
+		global $wpdb;
+
+		$table = $wpdb->prefix . Migrator::CONVERSATION_NOTES_TABLE;
+
+		$inserted = $wpdb->insert(
+			$table,
+			array(
+				'conversation_id'  => $conversation_id,
+				'operator_user_id' => $operator_user_id,
+				'note_uuid'        => $note_uuid,
+				'body_ciphertext'  => $ciphertext,
+				'created_at'       => $created_at,
+			),
+			array( '%d', '%d', '%s', '%s', '%s' )
+		);
+
+		if ( false === $inserted ) {
+			return null;
+		}
+
+		return $this->find_by_uuid( $note_uuid );
+	}
+
+	/**
 	 * Finds a note by UUID.
 	 *
 	 * @param string $note_uuid Note UUID.

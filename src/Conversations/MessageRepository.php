@@ -121,6 +121,73 @@ class MessageRepository {
 	}
 
 	/**
+	 * Inserts a message row with an explicit historical `created_at` and a
+	 * pre-derived idempotency key, encrypting the plaintext body through
+	 * this plugin's own vault immediately before persistence — or, if
+	 * `$plaintext_body` is `null` (the legacy row's own body was already
+	 * retention-nulled at the source), inserting a `NULL` ciphertext
+	 * directly, preserving that same "body no longer available" state
+	 * rather than encrypting an empty string. `delivery_state` is always
+	 * Support Chat's own `'stored'` constant, never a copy of the legacy
+	 * transport state (sc-m03-wp3-wp4 plan §4.1). Used only by the SC-M03
+	 * legacy migration engine.
+	 *
+	 * @param int         $conversation_id Target conversation primary key.
+	 * @param string      $direction       Copied 1:1 from the legacy row.
+	 * @param string|null $plaintext_body  Decrypted legacy plaintext, or null if legacy body was already retention-nulled.
+	 * @param string      $idempotency_key A pre-derived, collision-safe target key.
+	 * @param string      $created_at      Preserved legacy `created_at`.
+	 *
+	 * @return ConversationMessage|null Null if the schema/key is unavailable or the write failed.
+	 */
+	public function import_legacy(
+		int $conversation_id,
+		string $direction,
+		?string $plaintext_body,
+		string $idempotency_key,
+		string $created_at
+	): ?ConversationMessage {
+		if ( ! $this->schema_health->is_available() ) {
+			return null;
+		}
+
+		$message_uuid = wp_generate_uuid4();
+		$ciphertext   = null;
+
+		if ( null !== $plaintext_body ) {
+			try {
+				$ciphertext = $this->vault->encrypt( $plaintext_body, $this->context( $message_uuid ) );
+			} catch ( CredentialUnavailableException $exception ) {
+				return null;
+			}
+		}
+
+		global $wpdb;
+
+		$table = $wpdb->prefix . Migrator::CONVERSATION_MESSAGES_TABLE;
+
+		$inserted = $wpdb->insert(
+			$table,
+			array(
+				'conversation_id' => $conversation_id,
+				'message_uuid'    => $message_uuid,
+				'direction'       => $direction,
+				'body_ciphertext' => $ciphertext,
+				'delivery_state'  => 'stored',
+				'idempotency_key' => $idempotency_key,
+				'created_at'      => $created_at,
+			),
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s' )
+		);
+
+		if ( false === $inserted ) {
+			return null;
+		}
+
+		return $this->find_by_uuid( $message_uuid );
+	}
+
+	/**
 	 * Finds a message by UUID.
 	 *
 	 * @param string $message_uuid Message UUID.
