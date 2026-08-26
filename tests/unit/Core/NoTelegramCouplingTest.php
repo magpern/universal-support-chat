@@ -16,6 +16,22 @@ use SplFileInfo;
  */
 final class NoTelegramCouplingTest extends TestCase {
 
+	/**
+	 * The sole, narrow, ADR-0008-authorized exception to this repository's
+	 * "no Universal Telegram coupling" rule: the in-process legacy export
+	 * boundary consumer. `LegacyExportClient` (the interface) and
+	 * `InProcessLegacyExportClient` (its only implementation) are the
+	 * entire cross-plugin reference surface — every other file under
+	 * `src/Migration/`, and everywhere else in `src/`, remains fully
+	 * decoupled and is still checked below.
+	 *
+	 * @var array<int, string>
+	 */
+	private const AUTHORIZED_EXCEPTIONS = array(
+		'/src/Migration/LegacyExportClient.php',
+		'/src/Migration/InProcessLegacyExportClient.php',
+	);
+
 	public function test_src_has_no_telegram_or_ut_coupling(): void {
 		$root     = dirname( __DIR__, 3 ) . '/src';
 		$patterns = array(
@@ -38,6 +54,13 @@ final class NoTelegramCouplingTest extends TestCase {
 		foreach ( $files as $file ) {
 			/** @var SplFileInfo $file */
 			$path = $file->getPathname();
+
+			foreach ( self::AUTHORIZED_EXCEPTIONS as $exception ) {
+				if ( str_ends_with( $path, $exception ) ) {
+					continue 2;
+				}
+			}
+
 			$code = (string) file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local filesystem scan.
 			foreach ( $patterns as $pattern ) {
 				if ( 1 === preg_match( $pattern, $code ) ) {

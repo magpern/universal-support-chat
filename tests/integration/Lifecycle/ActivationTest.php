@@ -26,6 +26,6 @@ final class ActivationTest extends WP_UnitTestCase {
 		$health = Plugin::instance()->schema_health();
 		$this->assertNotNull( $health );
 		$this->assertTrue( $health->is_available() );
-		$this->assertSame( 8, (int) get_option( 'universal_support_chat_db_version', 0 ) );
+		$this->assertSame( 9, (int) get_option( 'universal_support_chat_db_version', 0 ) );
 	}
 }

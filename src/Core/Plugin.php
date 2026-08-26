@@ -40,6 +40,16 @@ use UniversalSupportChat\Conversations\RetentionCleanupHandler;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
 use UniversalSupportChat\Core\Configuration\Settings;
 use UniversalSupportChat\Core\Security\CredentialVault;
+use UniversalSupportChat\Migration\Cli\LegacyMigrateCommand;
+use UniversalSupportChat\Migration\DefaultDenyQuiescenceStateProvider;
+use UniversalSupportChat\Migration\InProcessLegacyExportClient;
+use UniversalSupportChat\Migration\LegacyMigrationBatchLogRepository;
+use UniversalSupportChat\Migration\LegacyMigrationMapRepository;
+use UniversalSupportChat\Migration\LegacyMigrationMessageMapRepository;
+use UniversalSupportChat\Migration\LegacyMigrationRunRepository;
+use UniversalSupportChat\Migration\LegacyMigrationValidator;
+use UniversalSupportChat\Migration\PhaseABackfillService;
+use UniversalSupportChat\Migration\PhaseBReconciliationService;
 use UniversalSupportChat\Persistence\MigrationFailedException;
 use UniversalSupportChat\Persistence\MigrationLock;
 use UniversalSupportChat\Persistence\Migrator;
@@ -79,6 +89,35 @@ final class Plugin {
 	 * @var AdapterContractClient|null
 	 */
 	private ?AdapterContractClient $adapter_contract_client = null;
+
+	/**
+	 * SC-M03 work packages 3-4: conversation-level legacy migration map,
+	 * for tests/diagnostics.
+	 *
+	 * @var LegacyMigrationMapRepository|null
+	 */
+	private ?LegacyMigrationMapRepository $legacy_migration_map = null;
+
+	/**
+	 * SC-M03 work packages 3-4: Phase A preparatory backfill, for tests.
+	 *
+	 * @var PhaseABackfillService|null
+	 */
+	private ?PhaseABackfillService $phase_a_backfill_service = null;
+
+	/**
+	 * SC-M03 work packages 3-4: Phase B final reconciliation/validation, for tests.
+	 *
+	 * @var PhaseBReconciliationService|null
+	 */
+	private ?PhaseBReconciliationService $phase_b_reconciliation_service = null;
+
+	/**
+	 * SC-M03 work packages 3-4: read-only migration validators, for tests.
+	 *
+	 * @var LegacyMigrationValidator|null
+	 */
+	private ?LegacyMigrationValidator $legacy_migration_validator = null;
 
 	/**
 	 * Singleton accessor.
@@ -161,6 +200,47 @@ final class Plugin {
 		( new HubActions( $schema_health, $conversations, $messages, $notes, $audit ) )->register();
 		( new WidgetAssets( $settings, $schema_health ) )->register();
 
+		// SC-M03 work packages 3-4: legacy migration engine (ADR-0008,
+		// sc-m03-wp3-wp4-legacy-migration-engine-plan-v1.md). Reaches
+		// Universal Telegram only through InProcessLegacyExportClient, its
+		// own dedicated WP-CLI command below — never through the widget,
+		// Hub, or Contract v1 request paths above.
+		$legacy_export_client         = new InProcessLegacyExportClient();
+		$quiescence                   = new DefaultDenyQuiescenceStateProvider();
+		$legacy_migration_map         = new LegacyMigrationMapRepository( $schema_health );
+		$legacy_migration_message_map = new LegacyMigrationMessageMapRepository( $schema_health );
+		$legacy_migration_runs        = new LegacyMigrationRunRepository( $schema_health );
+		$legacy_migration_batch_log   = new LegacyMigrationBatchLogRepository( $schema_health );
+
+		$this->legacy_migration_map           = $legacy_migration_map;
+		$this->legacy_migration_validator     = new LegacyMigrationValidator( $messages, $notes, $legacy_migration_message_map );
+		$this->phase_a_backfill_service       = new PhaseABackfillService(
+			$legacy_export_client,
+			$conversations,
+			$messages,
+			$notes,
+			$legacy_migration_map,
+			$legacy_migration_message_map,
+			$legacy_migration_runs,
+			$legacy_migration_batch_log
+		);
+		$this->phase_b_reconciliation_service = new PhaseBReconciliationService(
+			$legacy_export_client,
+			$quiescence,
+			$messages,
+			$notes,
+			$legacy_migration_map,
+			$legacy_migration_message_map,
+			$this->legacy_migration_validator
+		);
+
+		( new LegacyMigrateCommand(
+			$this->phase_a_backfill_service,
+			$this->phase_b_reconciliation_service,
+			$legacy_migration_map,
+			$this->legacy_migration_validator
+		) )->register();
+
 		unset( $caps );
 	}
 
@@ -177,5 +257,33 @@ final class Plugin {
 	 */
 	public function adapter_contract_client(): ?AdapterContractClient {
 		return $this->adapter_contract_client;
+	}
+
+	/**
+	 * SC-M03 work packages 3-4 conversation-level legacy migration map (tests/diagnostics).
+	 */
+	public function legacy_migration_map(): ?LegacyMigrationMapRepository {
+		return $this->legacy_migration_map;
+	}
+
+	/**
+	 * SC-M03 work package 3 Phase A preparatory backfill (tests).
+	 */
+	public function phase_a_backfill_service(): ?PhaseABackfillService {
+		return $this->phase_a_backfill_service;
+	}
+
+	/**
+	 * SC-M03 work package 4 Phase B reconciliation/validation (tests).
+	 */
+	public function phase_b_reconciliation_service(): ?PhaseBReconciliationService {
+		return $this->phase_b_reconciliation_service;
+	}
+
+	/**
+	 * SC-M03 work package 4 read-only migration validators (tests).
+	 */
+	public function legacy_migration_validator(): ?LegacyMigrationValidator {
+		return $this->legacy_migration_validator;
 	}
 }

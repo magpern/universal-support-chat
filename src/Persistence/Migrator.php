@@ -16,13 +16,17 @@ namespace UniversalSupportChat\Persistence;
  */
 class Migrator {
 
-	public const AUDIT_LOG_TABLE             = 'universal_support_chat_audit_log';
-	public const CONVERSATIONS_TABLE         = 'universal_support_chat_conversations';
-	public const CONVERSATION_MESSAGES_TABLE = 'universal_support_chat_conversation_messages';
-	public const CONVERSATION_NOTES_TABLE    = 'universal_support_chat_conversation_notes';
-	public const CHANNEL_PEERS_TABLE         = 'universal_support_chat_channel_peers';
-	public const CONTRACT_NONCES_TABLE       = 'universal_support_chat_contract_nonces';
-	public const CHANNEL_STATUS_TABLE        = 'universal_support_chat_channel_status';
+	public const AUDIT_LOG_TABLE                    = 'universal_support_chat_audit_log';
+	public const CONVERSATIONS_TABLE                = 'universal_support_chat_conversations';
+	public const CONVERSATION_MESSAGES_TABLE        = 'universal_support_chat_conversation_messages';
+	public const CONVERSATION_NOTES_TABLE           = 'universal_support_chat_conversation_notes';
+	public const CHANNEL_PEERS_TABLE                = 'universal_support_chat_channel_peers';
+	public const CONTRACT_NONCES_TABLE              = 'universal_support_chat_contract_nonces';
+	public const CHANNEL_STATUS_TABLE               = 'universal_support_chat_channel_status';
+	public const LEGACY_MIGRATION_RUNS_TABLE        = 'universal_support_chat_legacy_migration_runs';
+	public const LEGACY_MIGRATION_MAP_TABLE         = 'universal_support_chat_legacy_migration_map';
+	public const LEGACY_MIGRATION_MESSAGE_MAP_TABLE = 'universal_support_chat_legacy_migration_message_map';
+	public const LEGACY_MIGRATION_BATCH_LOG_TABLE   = 'universal_support_chat_legacy_migration_batch_log';
 
 	private const DB_VERSION_OPTION = 'universal_support_chat_db_version';
 
@@ -46,7 +50,7 @@ class Migrator {
 	 * Highest step number this migrator knows how to run.
 	 */
 	protected function target_version(): int {
-		return 8;
+		return 9;
 	}
 
 	/**
@@ -113,6 +117,7 @@ class Migrator {
 			6 => array( array( $this, 'step_6_create_contract_nonces_table' ), array( $this, 'verify_step_6' ) ),
 			7 => array( array( $this, 'step_7_create_channel_status_table' ), array( $this, 'verify_step_7' ) ),
 			8 => array( array( $this, 'step_8_add_channel_peers_outbound_route_base' ), array( $this, 'verify_step_8' ) ),
+			9 => array( array( $this, 'step_9_create_legacy_migration_tables' ), array( $this, 'verify_step_9' ) ),
 		);
 
 		if ( ! isset( $steps[ $number ] ) ) {
@@ -562,6 +567,173 @@ class Migrator {
 			$wpdb->prefix . self::CHANNEL_PEERS_TABLE,
 			array( 'outbound_route_base' )
 		);
+	}
+
+	/**
+	 * Creates the SC-M03 work packages 3-4 legacy migration metadata tables
+	 * (ADR-0008, sc-m03-wp3-wp4-legacy-migration-engine-plan-v1.md §4.3).
+	 * Every non-ciphertext column here holds only IDs, timestamps, booleans,
+	 * or counts — never plaintext or a content-derived digest (plan §4.5).
+	 */
+	private function step_9_create_legacy_migration_tables(): void {
+		global $wpdb;
+
+		$charset_collate = $wpdb->get_charset_collate();
+
+		$runs_table = $wpdb->prefix . self::LEGACY_MIGRATION_RUNS_TABLE;
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$runs_table} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				run_uuid CHAR(36) NOT NULL,
+				phase VARCHAR(16) NOT NULL,
+				status VARCHAR(16) NOT NULL DEFAULT 'running',
+				dry_run TINYINT(1) NOT NULL DEFAULT 0,
+				batch_size INT UNSIGNED NOT NULL,
+				checkpoint_cursor BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				started_at DATETIME NOT NULL,
+				completed_at DATETIME NULL,
+				created_by_user_id BIGINT UNSIGNED NULL,
+				PRIMARY KEY (id),
+				UNIQUE KEY run_uuid (run_uuid),
+				KEY phase_status (phase, status)
+			) {$charset_collate}"
+		);
+
+		$map_table = $wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE;
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$map_table} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				source_conversation_id BIGINT UNSIGNED NOT NULL,
+				source_conversation_uuid CHAR(36) NOT NULL,
+				target_conversation_id BIGINT UNSIGNED NULL,
+				target_conversation_uuid CHAR(36) NULL,
+				status VARCHAR(16) NOT NULL DEFAULT 'pending',
+				legacy_bot_id BIGINT UNSIGNED NULL,
+				legacy_destination_id BIGINT UNSIGNED NULL,
+				legacy_telegram_topic_id BIGINT UNSIGNED NULL,
+				legacy_topic_creation_state VARCHAR(32) NULL,
+				legacy_topic_lifecycle_state VARCHAR(32) NULL,
+				message_count_source INT UNSIGNED NOT NULL DEFAULT 0,
+				message_count_target INT UNSIGNED NOT NULL DEFAULT 0,
+				note_count_source INT UNSIGNED NOT NULL DEFAULT 0,
+				note_count_target INT UNSIGNED NOT NULL DEFAULT 0,
+				validation_passed TINYINT(1) NULL,
+				validated_at DATETIME NULL,
+				error_reason VARCHAR(191) NULL,
+				migrated_at DATETIME NULL,
+				created_at DATETIME NOT NULL,
+				updated_at DATETIME NOT NULL,
+				PRIMARY KEY (id),
+				UNIQUE KEY source_conversation_id (source_conversation_id),
+				UNIQUE KEY source_conversation_uuid (source_conversation_uuid),
+				KEY status (status)
+			) {$charset_collate}"
+		);
+
+		$message_map_table = $wpdb->prefix . self::LEGACY_MIGRATION_MESSAGE_MAP_TABLE;
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$message_map_table} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				conversation_map_id BIGINT UNSIGNED NOT NULL,
+				kind VARCHAR(16) NOT NULL,
+				source_id BIGINT UNSIGNED NOT NULL,
+				source_uuid CHAR(36) NOT NULL,
+				target_id BIGINT UNSIGNED NULL,
+				target_uuid CHAR(36) NULL,
+				idempotency_key CHAR(36) NULL,
+				created_at DATETIME NOT NULL,
+				PRIMARY KEY (id),
+				UNIQUE KEY conversation_kind_source (conversation_map_id, kind, source_id),
+				KEY conversation_map_id (conversation_map_id)
+			) {$charset_collate}"
+		);
+
+		$batch_log_table = $wpdb->prefix . self::LEGACY_MIGRATION_BATCH_LOG_TABLE;
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$batch_log_table} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				run_id BIGINT UNSIGNED NOT NULL,
+				batch_number INT UNSIGNED NOT NULL,
+				cursor_start BIGINT UNSIGNED NOT NULL,
+				cursor_end BIGINT UNSIGNED NOT NULL,
+				rows_processed INT UNSIGNED NOT NULL DEFAULT 0,
+				rows_migrated INT UNSIGNED NOT NULL DEFAULT 0,
+				rows_skipped INT UNSIGNED NOT NULL DEFAULT 0,
+				rows_failed INT UNSIGNED NOT NULL DEFAULT 0,
+				started_at DATETIME NOT NULL,
+				completed_at DATETIME NULL,
+				error_summary VARCHAR(191) NULL,
+				PRIMARY KEY (id),
+				KEY run_id (run_id)
+			) {$charset_collate}"
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	/**
+	 * Verifies step 9's four tables and their columns exist, and that no
+	 * plaintext/content-derived column was accidentally added (only IDs,
+	 * timestamps, booleans, counts, and short stable reason strings).
+	 */
+	private function verify_step_9(): bool {
+		global $wpdb;
+
+		$runs_ok = $this->table_has_columns(
+			$wpdb->prefix . self::LEGACY_MIGRATION_RUNS_TABLE,
+			array( 'id', 'run_uuid', 'phase', 'status', 'dry_run', 'batch_size', 'checkpoint_cursor', 'started_at', 'completed_at', 'created_by_user_id' )
+		);
+
+		$map_ok = $this->table_has_columns(
+			$wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE,
+			array(
+				'id',
+				'source_conversation_id',
+				'source_conversation_uuid',
+				'target_conversation_id',
+				'target_conversation_uuid',
+				'status',
+				'legacy_bot_id',
+				'legacy_destination_id',
+				'legacy_telegram_topic_id',
+				'legacy_topic_creation_state',
+				'legacy_topic_lifecycle_state',
+				'message_count_source',
+				'message_count_target',
+				'note_count_source',
+				'note_count_target',
+				'validation_passed',
+				'validated_at',
+				'error_reason',
+				'migrated_at',
+				'created_at',
+				'updated_at',
+			)
+		);
+
+		$message_map_ok = $this->table_has_columns(
+			$wpdb->prefix . self::LEGACY_MIGRATION_MESSAGE_MAP_TABLE,
+			array( 'id', 'conversation_map_id', 'kind', 'source_id', 'source_uuid', 'target_id', 'target_uuid', 'idempotency_key', 'created_at' )
+		);
+
+		$batch_log_ok = $this->table_has_columns(
+			$wpdb->prefix . self::LEGACY_MIGRATION_BATCH_LOG_TABLE,
+			array( 'id', 'run_id', 'batch_number', 'cursor_start', 'cursor_end', 'rows_processed', 'rows_migrated', 'rows_skipped', 'rows_failed', 'started_at', 'completed_at', 'error_summary' )
+		);
+
+		if ( ! $runs_ok || ! $map_ok || ! $message_map_ok || ! $batch_log_ok ) {
+			return false;
+		}
+
+		// Never any plaintext/body column, and never a Telegram-native
+		// identifier column (bot_id/destination_id/topic id are already
+		// covered above as legacy_*-prefixed, non-content routing evidence
+		// only — this forbids anything additional creeping in).
+		$forbidden_content_columns = array( 'body', 'body_ciphertext', 'plaintext', 'content_hash', 'digest' );
+
+		return ! $this->table_has_any_column( $wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE, $forbidden_content_columns )
+			&& ! $this->table_has_any_column( $wpdb->prefix . self::LEGACY_MIGRATION_MESSAGE_MAP_TABLE, $forbidden_content_columns )
+			&& ! $this->table_has_any_column( $wpdb->prefix . self::LEGACY_MIGRATION_BATCH_LOG_TABLE, $forbidden_content_columns );
 	}
 
 	/**

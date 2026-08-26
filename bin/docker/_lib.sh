@@ -3,6 +3,7 @@ set -euo pipefail
 
 SC_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SC_COMPOSE_FILE="${SC_REPO_ROOT}/docker/docker-compose.yml"
+SC_COMPOSE_INTEROP_FILE="${SC_REPO_ROOT}/docker/docker-compose.interop.yml"
 
 sc_parse_flag() {
     local flag="$1"
@@ -20,4 +21,10 @@ sc_compose_run() {
     local php_version="${1:-8.1}"
     shift
     PHP_VERSION="$php_version" docker compose -f "$SC_COMPOSE_FILE" run --rm php "$@"
+}
+
+sc_compose_run_interop() {
+    local php_version="${1:-8.1}"
+    shift
+    PHP_VERSION="$php_version" docker compose -f "$SC_COMPOSE_FILE" -f "$SC_COMPOSE_INTEROP_FILE" run --rm php "$@"
 }
