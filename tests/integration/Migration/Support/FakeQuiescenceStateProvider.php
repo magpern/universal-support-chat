@@ -28,6 +28,18 @@ final class FakeQuiescenceStateProvider implements QuiescenceStateProvider {
 	}
 
 	/**
+	 * Flips this fake back to non-quiescent — used to simulate quiescence
+	 * being lost mid-run (SC-M03 WP3-4 Phase B continuous quiescence
+	 * re-check addendum).
+	 */
+	public function make_not_quiescent(): self {
+		$this->quiescent = false;
+		$this->since     = null;
+
+		return $this;
+	}
+
+	/**
 	 * {@inheritDoc}
 	 */
 	public function is_quiescent(): bool {

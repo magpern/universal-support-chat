@@ -81,7 +81,40 @@ final class PhaseBReconciliationService {
 		$failed    = 0;
 
 		foreach ( $rows as $row ) {
-			$passed = $this->reconcile_one( $row, $dry_run );
+			// Re-check immediately before this row's own reconciliation
+			// begins — the top-of-run() check above can be stale by the
+			// time later rows in the same run are reached (SC-M03 WP3-4
+			// Phase B continuous quiescence re-check addendum): a real,
+			// live-computed QuiescenceStateProvider can flip `false` mid-run
+			// even though nothing changed on this side. PHPStan's static
+			// flow analysis cannot know that: it sees the same interface
+			// call already made once above and assumes a pure, unchanged
+			// result — a real provider is deliberately not pure here.
+			if ( ! $this->quiescence->is_quiescent() ) { // @phpstan-ignore booleanNot.alwaysFalse
+				return array(
+					'status'    => 'refused',
+					'reason'    => self::REFUSED_NOT_QUIESCENT,
+					'checked'   => $validated + $failed,
+					'validated' => $validated,
+					'failed'    => $failed,
+				);
+			}
+
+			try {
+				$passed = $this->reconcile_one( $row, $dry_run );
+			} catch ( QuiescenceLostDuringReconciliationException $exception ) {
+				// reconcile_one() re-checked immediately before its own
+				// promotion-to-migrated write and lost quiescence there —
+				// stop the whole run now; do not count this row as failed,
+				// do not continue to any further row.
+				return array(
+					'status'    => 'refused',
+					'reason'    => self::REFUSED_NOT_QUIESCENT,
+					'checked'   => $validated + $failed,
+					'validated' => $validated,
+					'failed'    => $failed,
+				);
+			}
 
 			if ( $passed ) {
 				++$validated;
@@ -106,6 +139,11 @@ final class PhaseBReconciliationService {
 	 *
 	 * @param LegacyMigrationMapEntry $row     The `backfilled` map row to reconcile.
 	 * @param bool                    $dry_run Whether to simulate without writing.
+	 *
+	 * @throws QuiescenceLostDuringReconciliationException If `is_quiescent()`,
+	 *         re-checked immediately before this row's promotion-to-`migrated`
+	 *         write, returns `false` — the write is not made; `run()` catches
+	 *         this and stops the whole reconciliation pass.
 	 */
 	private function reconcile_one( LegacyMigrationMapEntry $row, bool $dry_run ): bool {
 		$refetch = $this->export_client->export_batch( $row->source_conversation_id() - 1, 1 );
@@ -116,6 +154,10 @@ final class PhaseBReconciliationService {
 			// to reconcile, but content already copied is not re-checked
 			// without a live source to compare against.
 			if ( ! $dry_run ) {
+				if ( ! $this->quiescence->is_quiescent() ) {
+					throw new QuiescenceLostDuringReconciliationException();
+				}
+
 				$this->map->mark_migrated( $row->id(), true, $row->message_count_target(), $row->note_count_target() );
 			}
 
@@ -217,6 +259,10 @@ final class PhaseBReconciliationService {
 
 		if ( ! $dry_run ) {
 			if ( $passed ) {
+				if ( ! $this->quiescence->is_quiescent() ) {
+					throw new QuiescenceLostDuringReconciliationException();
+				}
+
 				$this->map->mark_migrated( $row->id(), true, $final_message_count, $final_note_count );
 			} else {
 				$this->map->mark_validation_failed( $row->id() );
