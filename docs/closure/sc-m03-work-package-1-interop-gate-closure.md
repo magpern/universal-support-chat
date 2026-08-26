@@ -30,7 +30,12 @@ gate is closed here.
 - Repository: `magpern/universal-support-chat`
 - Starting commit (`origin/main`): `2f748168f591bec551a740a5060d394bc6e29ba3` (merge of PR #6, SC-M03 WP0)
 - Branch: `feature/sc-m03-ut-interop-wp6`
-- Final branch SHA: `0ec44cf8f901c641d4a000abdf70a8764a607eae`
+- Interoperability-tested implementation SHA (the exact SHA the companion
+  Universal Telegram dual-plugin harness loaded and ran its 35-test,
+  413-assertion interoperability matrix against): `0ec44cf8f901c641d4a000abdf70a8764a607eae`
+- Final branch SHA (current PR head, after this doc-only accuracy
+  correction — no runtime/test/schema/version change since the
+  interoperability-tested SHA above): `cbe01c044ce7e9f345f5e20c4c72d64f94ae8793`
 - Plugin version: `0.3.0` → `0.4.0` (minor bump: genuine new capability
   class — the outbound client — per this repository's own versioning
   convention documented in the WP0 closure record)
