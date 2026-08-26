@@ -41,7 +41,6 @@ use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
 use UniversalSupportChat\Core\Configuration\Settings;
 use UniversalSupportChat\Core\Security\CredentialVault;
 use UniversalSupportChat\Migration\Cli\LegacyMigrateCommand;
-use UniversalSupportChat\Migration\DefaultDenyQuiescenceStateProvider;
 use UniversalSupportChat\Migration\InProcessLegacyExportClient;
 use UniversalSupportChat\Migration\LegacyMigrationBatchLogRepository;
 use UniversalSupportChat\Migration\LegacyMigrationMapRepository;
@@ -50,6 +49,7 @@ use UniversalSupportChat\Migration\LegacyMigrationRunRepository;
 use UniversalSupportChat\Migration\LegacyMigrationValidator;
 use UniversalSupportChat\Migration\PhaseABackfillService;
 use UniversalSupportChat\Migration\PhaseBReconciliationService;
+use UniversalSupportChat\Migration\UniversalTelegramQuiescenceStateProvider;
 use UniversalSupportChat\Persistence\MigrationFailedException;
 use UniversalSupportChat\Persistence\MigrationLock;
 use UniversalSupportChat\Persistence\Migrator;
@@ -202,11 +202,15 @@ final class Plugin {
 
 		// SC-M03 work packages 3-4: legacy migration engine (ADR-0008,
 		// sc-m03-wp3-wp4-legacy-migration-engine-plan-v1.md). Reaches
-		// Universal Telegram only through InProcessLegacyExportClient, its
-		// own dedicated WP-CLI command below — never through the widget,
-		// Hub, or Contract v1 request paths above.
+		// Universal Telegram only through InProcessLegacyExportClient and
+		// UniversalTelegramQuiescenceStateProvider, its own dedicated
+		// WP-CLI command below — never through the widget, Hub, or
+		// Contract v1 request paths above. The quiescence-provider swap
+		// from the permanent default-deny stub to this real, delegating
+		// provider is the composition-root amendment recorded in
+		// docs/closure/sc-m03-wp3-4-phase-b-continuous-quiescence-recheck-addendum.md.
 		$legacy_export_client         = new InProcessLegacyExportClient();
-		$quiescence                   = new DefaultDenyQuiescenceStateProvider();
+		$quiescence                   = new UniversalTelegramQuiescenceStateProvider();
 		$legacy_migration_map         = new LegacyMigrationMapRepository( $schema_health );
 		$legacy_migration_message_map = new LegacyMigrationMessageMapRepository( $schema_health );
 		$legacy_migration_runs        = new LegacyMigrationRunRepository( $schema_health );
