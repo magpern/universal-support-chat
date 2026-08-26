@@ -58,6 +58,10 @@ class PairingService {
 	 * @param bool               $confirm_replace           Explicit confirmation to replace an active key.
 	 * @param int|null           $actor_user_id             Acting administrator's WP user ID, for audit.
 	 * @param string|null        $expires_at                Expiry (UTC mysql), or null for no expiry.
+	 * @param string|null        $outbound_route_base       Peer's REST route base for Support-Chat-to-adapter
+	 *                                                       calls (e.g. "universal-telegram/v1/support-chat"),
+	 *                                                       or null if outbound calls to this peer are not
+	 *                                                       yet configured. Non-secret routing metadata only.
 	 */
 	public function pair(
 		string $peer_id,
@@ -67,7 +71,8 @@ class PairingService {
 		?string $required_peer_capability,
 		bool $confirm_replace,
 		?int $actor_user_id,
-		?string $expires_at = null
+		?string $expires_at = null,
+		?string $outbound_route_base = null
 	): PairingResult {
 		if ( ! $this->is_valid_peer_id( $peer_id ) ) {
 			return PairingResult::failure( PairingResult::REASON_INVALID_INPUT );
@@ -86,10 +91,14 @@ class PairingService {
 			return PairingResult::failure( PairingResult::REASON_INVALID_INPUT );
 		}
 
+		if ( null !== $outbound_route_base && ! self::is_valid_route_base( $outbound_route_base ) ) {
+			return PairingResult::failure( PairingResult::REASON_INVALID_INPUT );
+		}
+
 		$existing = $this->peers->find_by_peer_id( $peer_id );
 
 		if ( null === $existing ) {
-			$created = $this->peers->create( $peer_id, $public_key_base64, $key_id, $allowed_operations, $required_peer_capability, $expires_at );
+			$created = $this->peers->create( $peer_id, $public_key_base64, $key_id, $allowed_operations, $required_peer_capability, $expires_at, $outbound_route_base );
 			if ( null === $created ) {
 				return PairingResult::failure( PairingResult::REASON_UNAVAILABLE );
 			}
@@ -103,7 +112,8 @@ class PairingService {
 			&& hash_equals( $existing->public_key_base64(), $public_key_base64 )
 			&& hash_equals( $existing->key_id(), $key_id )
 			&& $existing->allowed_operations() === array_values( $allowed_operations )
-			&& $existing->required_peer_capability() === $required_peer_capability;
+			&& $existing->required_peer_capability() === $required_peer_capability
+			&& $existing->outbound_route_base() === $outbound_route_base;
 
 		if ( $unchanged ) {
 			return PairingResult::success( PairingResult::REASON_UNCHANGED );
@@ -113,7 +123,7 @@ class PairingService {
 			return PairingResult::failure( PairingResult::REASON_CONFIRMATION_REQUIRED );
 		}
 
-		$replaced = $this->peers->replace_key( $peer_id, $public_key_base64, $key_id, $allowed_operations, $required_peer_capability, $expires_at );
+		$replaced = $this->peers->replace_key( $peer_id, $public_key_base64, $key_id, $allowed_operations, $required_peer_capability, $expires_at, $outbound_route_base );
 		if ( null === $replaced ) {
 			return PairingResult::failure( PairingResult::REASON_UNAVAILABLE );
 		}
@@ -179,6 +189,19 @@ class PairingService {
 	 */
 	private function is_valid_peer_id( string $peer_id ): bool {
 		return 1 === preg_match( '/^[a-z0-9-]{1,191}$/', $peer_id );
+	}
+
+	/**
+	 * Whether a candidate outbound REST route base is syntactically
+	 * acceptable: a WordPress REST namespace/prefix path segment only
+	 * (e.g. "universal-telegram/v1/support-chat") — no scheme, host,
+	 * leading/trailing slash, or query string. Routing metadata only; never
+	 * used to relax or bypass signature verification.
+	 *
+	 * @param string $route_base Candidate route base.
+	 */
+	private static function is_valid_route_base( string $route_base ): bool {
+		return 1 === preg_match( '#^[a-z0-9-]+/v[0-9]+(/[a-z0-9_-]+)*$#', $route_base ) && strlen( $route_base ) <= 191;
 	}
 
 	/**

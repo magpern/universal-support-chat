@@ -63,6 +63,16 @@ final class PeerRecord {
 	private ?string $required_peer_capability;
 
 	/**
+	 * The REST route base Support Chat targets when calling this peer for
+	 * a Support-Chat-to-adapter Contract v1 operation (e.g.
+	 * "universal-telegram/v1/support-chat"), or null if not configured —
+	 * outbound calls to this peer fail closed until it is set.
+	 *
+	 * @var string|null
+	 */
+	private ?string $outbound_route_base;
+
+	/**
 	 * Stored status: active, disabled, or revoked.
 	 *
 	 * @var string
@@ -119,6 +129,7 @@ final class PeerRecord {
 	 * @param string|null         $last_used_at              Last used at.
 	 * @param string|null         $expires_at                Expires at.
 	 * @param string|null         $revoked_at                Revoked at.
+	 * @param string|null         $outbound_route_base       Outbound REST route base, or null.
 	 */
 	public function __construct(
 		int $id,
@@ -132,7 +143,8 @@ final class PeerRecord {
 		?string $last_rotated_at,
 		?string $last_used_at,
 		?string $expires_at,
-		?string $revoked_at
+		?string $revoked_at,
+		?string $outbound_route_base = null
 	) {
 		$this->id                       = $id;
 		$this->peer_id                  = $peer_id;
@@ -146,6 +158,7 @@ final class PeerRecord {
 		$this->last_used_at             = $last_used_at;
 		$this->expires_at               = $expires_at;
 		$this->revoked_at               = $revoked_at;
+		$this->outbound_route_base      = $outbound_route_base;
 	}
 
 	/**
@@ -212,6 +225,15 @@ final class PeerRecord {
 	 */
 	public function required_peer_capability(): ?string {
 		return $this->required_peer_capability;
+	}
+
+	/**
+	 * The REST route base Support Chat targets when calling this peer for a
+	 * Support-Chat-to-adapter Contract v1 operation, or null if not yet
+	 * configured (outbound calls to this peer fail closed until it is).
+	 */
+	public function outbound_route_base(): ?string {
+		return $this->outbound_route_base;
 	}
 
 	/**
@@ -318,7 +340,8 @@ final class PeerRecord {
 			self::nullable_string( $row['last_rotated_at'] ?? null ),
 			self::nullable_string( $row['last_used_at'] ?? null ),
 			self::nullable_string( $row['expires_at'] ?? null ),
-			self::nullable_string( $row['revoked_at'] ?? null )
+			self::nullable_string( $row['revoked_at'] ?? null ),
+			self::nullable_string( $row['outbound_route_base'] ?? null )
 		);
 	}
 

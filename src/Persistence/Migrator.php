@@ -46,7 +46,7 @@ class Migrator {
 	 * Highest step number this migrator knows how to run.
 	 */
 	protected function target_version(): int {
-		return 7;
+		return 8;
 	}
 
 	/**
@@ -112,6 +112,7 @@ class Migrator {
 			5 => array( array( $this, 'step_5_create_channel_peers_table' ), array( $this, 'verify_step_5' ) ),
 			6 => array( array( $this, 'step_6_create_contract_nonces_table' ), array( $this, 'verify_step_6' ) ),
 			7 => array( array( $this, 'step_7_create_channel_status_table' ), array( $this, 'verify_step_7' ) ),
+			8 => array( array( $this, 'step_8_add_channel_peers_outbound_route_base' ), array( $this, 'verify_step_8' ) ),
 		);
 
 		if ( ! isset( $steps[ $number ] ) ) {
@@ -518,6 +519,48 @@ class Migrator {
 		return ! $this->table_has_any_column(
 			$table,
 			array( 'telegram_topic_id', 'telegram_message_id', 'bot_id', 'destination_id' )
+		);
+	}
+
+	/**
+	 * Adds the peer's outbound REST route base (ADR-0007 §1's "future
+	 * adapter" note): the registered route prefix Support Chat targets when
+	 * it, itself, calls that peer for the four Support-Chat-to-adapter
+	 * Contract v1 operations (`ensure_channel_case`, `notify_operators`,
+	 * `deliver_transcript_backfill`, `deliver_message`). Non-secret routing
+	 * metadata only — never a credential, never used for verification of
+	 * inbound calls, and null (no outbound calls possible yet) for every
+	 * peer paired before this column existed.
+	 */
+	private function step_8_add_channel_peers_outbound_route_base(): void {
+		global $wpdb;
+
+		$table = $wpdb->prefix . self::CHANNEL_PEERS_TABLE;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
+		$exists = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = 'outbound_route_base'",
+				$wpdb->dbname,
+				$table
+			)
+		);
+
+		if ( '0' === (string) $exists ) {
+			$wpdb->query( "ALTER TABLE {$table} ADD COLUMN outbound_route_base VARCHAR(191) NULL AFTER required_peer_capability" );
+		}
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	/**
+	 * Verifies step 8's column exists.
+	 */
+	private function verify_step_8(): bool {
+		global $wpdb;
+
+		return $this->table_has_columns(
+			$wpdb->prefix . self::CHANNEL_PEERS_TABLE,
+			array( 'outbound_route_base' )
 		);
 	}
 

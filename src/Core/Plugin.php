@@ -26,6 +26,9 @@ use UniversalSupportChat\ChannelContract\Auth\PeerRepository;
 use UniversalSupportChat\ChannelContract\Auth\SignatureVerifier;
 use UniversalSupportChat\ChannelContract\ChannelStatusRepository;
 use UniversalSupportChat\ChannelContract\ContractDiscovery;
+use UniversalSupportChat\ChannelContract\Outbound\AdapterContractClient;
+use UniversalSupportChat\ChannelContract\Outbound\InProcessContractTransport;
+use UniversalSupportChat\ChannelContract\Outbound\SignatureSigner as OutboundSignatureSigner;
 use UniversalSupportChat\ChannelContract\Rest\ContractOperationDispatcher;
 use UniversalSupportChat\ChannelContract\Rest\ContractOperationsController;
 use UniversalSupportChat\ChatWidget\WidgetAssets;
@@ -68,6 +71,14 @@ final class Plugin {
 	 * @var SchemaHealth|null
 	 */
 	private ?SchemaHealth $schema_health = null;
+
+	/**
+	 * Outbound Contract v1 client (Support Chat -> adapter), for future
+	 * escalation/delivery call sites (SC-M03 work package 1).
+	 *
+	 * @var AdapterContractClient|null
+	 */
+	private ?AdapterContractClient $adapter_contract_client = null;
 
 	/**
 	 * Singleton accessor.
@@ -126,6 +137,13 @@ final class Plugin {
 		$verifier       = new SignatureVerifier( $peers, $nonces );
 		$dispatcher     = new ContractOperationDispatcher( $conversations, $messages, $channel_status, $audit );
 
+		// SC-M03 work package 1: outbound Contract v1 client (ADR-0005 §4,
+		// ADR-0007). Wired here for future escalation/delivery call sites;
+		// this work package does not itself trigger any outbound call.
+		$outbound_signer               = new OutboundSignatureSigner( $own_keys );
+		$outbound_transport            = new InProcessContractTransport();
+		$this->adapter_contract_client = new AdapterContractClient( $peers, $outbound_signer, $outbound_transport, $audit );
+
 		$settings->register();
 
 		( new DiagnosticsPage( $schema_health, $audit_repo, $vault ) )->register();
@@ -151,5 +169,13 @@ final class Plugin {
 	 */
 	public function schema_health(): ?SchemaHealth {
 		return $this->schema_health;
+	}
+
+	/**
+	 * Outbound Contract v1 client for this request (tests / future
+	 * escalation call sites).
+	 */
+	public function adapter_contract_client(): ?AdapterContractClient {
+		return $this->adapter_contract_client;
 	}
 }
