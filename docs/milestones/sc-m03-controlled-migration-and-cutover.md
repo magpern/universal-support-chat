@@ -2,9 +2,9 @@
 
 ## Status
 
-Planned. **Work package 0 (Support Chat's authenticated Contract server) implemented** — see closure: `docs/closure/sc-m03-work-package-0-contract-server-closure.md`. **Migration/cutover implementation remains blocked** until work packages 1–3 (Universal Telegram's signed Contract client and joint interoperability tests) are also complete — see [§0 Sequencing amendment](#0-sequencing-amendment-adr-0007) below.
+Planned. **Work packages 0–1 implemented** (authenticated Contract server; Universal Telegram signed Contract client and joint interoperability gate) — see closures: `docs/closure/sc-m03-work-package-0-contract-server-closure.md`, `docs/closure/sc-m03-work-package-1-interop-gate-closure.md`. **Work packages 3–4 (legacy migration engine) are architecturally authorized** by ADR-0008 and the linked Product Owner decision record, but implementation remains blocked until Universal Telegram's own ADR-0008-pinning documentation amendment also merges — see [§0b Work packages 3–4 authorization amendment](#0b-work-packages-3-4-authorization-amendment-adr-0008) below. Work package 2 (quiescence) and work package 5 (binding creator) remain separate, unstarted, later units of work.
 
-Depends on: SC-M02; **UT Adapter M1** (binding table must exist); **ADR-0007** (authenticated Contract server design)
+Depends on: SC-M02; **UT Adapter M1** (binding table must exist); **ADR-0007** (authenticated Contract server design); **ADR-0008** (legacy export boundary and migration authority model)
 
 ## Objective
 
@@ -25,6 +25,16 @@ SC-M03 implementation is split and ordered as follows (frozen plan: [v2](../plan
 5. Only after SC-M03 acceptance, the Universal Telegram legacy Conversations/AI/widget/settings decommission (Cursor-led, Universal Telegram repository, out of scope here).
 
 **No SC-M03 migration/cutover implementation code may begin until steps 1–3 are merged.**
+
+## 0b. Work packages 3–4 authorization amendment (ADR-0008)
+
+Added by the legacy-export-boundary-and-migration-authority-model documentation freeze, additive to this charter (`docs/governance.md` "Changing a frozen milestone charter"). Does not alter §Principles, the interoperability matrix, or the exclusions below.
+
+Steps 1–3 above (Contract server, Universal Telegram signed client, joint interoperability gate) are complete. [ADR-0008](../adr/0008-legacy-export-boundary-and-migration-authority-model.md) now fixes the remaining architecture gap step 4 (the migration engine) depends on: a narrow, versioned, in-process, WP-CLI-only legacy-export boundary (never a Contract v1 operation, never a public REST route, never a shared secret), and a frozen `QuiescenceStateProvider` contract that binds work package 2's future real quiescence signal. The [work packages 3–4 implementation plan](../plans/sc-m03-wp3-wp4-legacy-migration-engine-plan-v1.md) and the [work packages 3–4 Product Owner decision record](../decisions/sc-m03-wp3-wp4-legacy-migration-po-decisions.md) (owner-identity semantics, assignment-data migration, ownerless conversations, retention timing, consent-state disposition) are both frozen alongside ADR-0008.
+
+**Work packages 3–4's closure may not claim real quiescence, cutover readiness, atomic route switching, soak, rollback, or any production migration execution** — `QuiescenceStateProvider` ships only as a default-deny stub and a test seam until work package 2 (a separate, later, unstarted unit of work) supplies a real implementation of this same frozen interface.
+
+**Work packages 3–4 implementation may not begin until both (a) ADR-0008 and (b) Universal Telegram's own documentation amendment — pinning ADR-0008's post-merge commit SHA and canonical blob URL, and implementing `LegacyExportServiceV1` per ADR-0008 §2–§5 — are merged to their respective `main` branches**, mirroring the identical two-repository gate step 1–3 above already established for the Contract server/signed-client pair.
 
 ## Principles (mandatory — ADR-0004)
 
@@ -69,3 +79,5 @@ SC-M03 implementation is split and ordered as follows (frozen plan: [v2](../plan
 ## Frozen plan
 
 [sc-m03-controlled-migration-and-cutover-plan-v2.md](../plans/sc-m03-controlled-migration-and-cutover-plan-v2.md) (supersedes [v1](../plans/sc-m03-controlled-migration-and-cutover-plan-v1.md); v1 retained unedited per `docs/plans/README.md`)
+
+Work packages 3–4 detail: [sc-m03-wp3-wp4-legacy-migration-engine-plan-v1.md](../plans/sc-m03-wp3-wp4-legacy-migration-engine-plan-v1.md), authorized by [ADR-0008](../adr/0008-legacy-export-boundary-and-migration-authority-model.md) and the [work packages 3–4 Product Owner decision record](../decisions/sc-m03-wp3-wp4-legacy-migration-po-decisions.md).

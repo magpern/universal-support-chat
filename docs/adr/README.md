@@ -15,8 +15,9 @@
 | 0005 | Canonical Support Channel Contract v1 |
 | 0006 | Optional channel and adapter failure model |
 | 0007 | Contract v1 mutual signed adapter authentication profile |
+| 0008 | Legacy export boundary and migration authority model |
 
-The next available number for any future ADR is **0008**.
+The next available number for any future ADR is **0009**.
 
 ## Immutability
 
@@ -46,3 +47,4 @@ Architecture or composition pattern; a security boundary; a persistence model; a
 - [ADR-0005 — Canonical Support Channel Contract v1](0005-canonical-support-channel-contract-v1.md)
 - [ADR-0006 — Optional channel and adapter failure model](0006-optional-channel-and-adapter-failure-model.md)
 - [ADR-0007 — Contract v1 mutual signed adapter authentication profile](0007-contract-v1-mutual-signed-adapter-authentication-profile.md)
+- [ADR-0008 — Legacy export boundary and migration authority model](0008-legacy-export-boundary-and-migration-authority-model.md)
