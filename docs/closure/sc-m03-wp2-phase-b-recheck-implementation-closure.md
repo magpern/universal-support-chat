@@ -58,4 +58,10 @@ This does **not** claim:
 
 ## Product Owner acceptance
 
-Pending. This PR is opened for review and is not merged by this task.
+**Accepted.** The Product Owner reviewed this closure record — its evidence,
+scope, and explicit exclusions unchanged from the original PASS verdict above
+— and granted acceptance following review and merge of PR #11 (`a91cb7f`,
+the merge commit that is this closure's own baseline, §"Baseline" above).
+This acceptance record is a documentation-only correction, added after the
+fact; it does not reopen, revise, or reinterpret any of the evidence, test
+results, or PASS verdict recorded earlier in this document.
