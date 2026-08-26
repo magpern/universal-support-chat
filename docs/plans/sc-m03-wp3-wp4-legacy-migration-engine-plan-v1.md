@@ -85,7 +85,7 @@ No plaintext, and no unkeyed content digest, is persisted anywhere outside the e
 ## 5. Directory, namespace, schema, and API impact
 
 - New Support Chat tables (next `db_version`, current target `8`): `legacy_migration_runs`, `legacy_migration_map`, `legacy_migration_message_map`, `legacy_migration_batch_log` (§4.3).
-- New Support Chat WP-CLI command namespace: `wp universal-support-chat legacy-migrate {run,status,validate}` (backfill/reconcile phases, dry-run, resume, `--assume-migration-authority` per ADR-0008 §4).
+- New Support Chat WP-CLI command namespace: `wp universal-support-chat legacy-migrate {run,status,validate}` (backfill/reconcile phases, dry-run, resume, `--assume-migration-authority` as a mandatory operator-confirmation guard against accidental invocation per ADR-0008 §4 — not a security control).
 - New Support Chat interface: `QuiescenceStateProvider` (§4.4), plus its default-deny stub and test fake.
 - New Support Chat field-mapping registry: `LegacyFieldMap::REGISTRY` (§4.1) plus `SchemaInventoryTest`.
 - No new Contract v1 operation; no new public REST route in either plugin (ADR-0008 §2). No change to `ChannelContract`'s existing surface.
@@ -93,7 +93,7 @@ No plaintext, and no unkeyed content digest, is persisted anywhere outside the e
 
 ## 6. Security and privacy impact
 
-Per ADR-0008 in full (export boundary ownership, redaction-at-source, WP-CLI-only fail-closed authority model, no shared secret, no permanent cross-plugin SQL) and §4.5 above. No Universal Telegram vault key material ever reaches Support Chat. No Support Chat vault key material ever reaches Universal Telegram.
+Per ADR-0008 in full (export boundary ownership, redaction-at-source, no shared secret, no permanent cross-plugin SQL) and §4.5 above. The actual security boundary is operating-system authority to execute WP-CLI against this install (ADR-0008 §4); `LegacyExportServiceV1` fails closed outside a WP-CLI context, closing every externally reachable path (web, Ajax, REST, cron), and `--assume-migration-authority` is a command-level operator-confirmation guard against accidental invocation, not an independent authentication mechanism — neither claims to restrict what already-authorized WP-CLI-context code can do. No Universal Telegram vault key material ever reaches Support Chat. No Support Chat vault key material ever reaches Universal Telegram.
 
 ## 7. Test and CI
 
@@ -113,7 +113,7 @@ Per ADR-0008 in full (export boundary ownership, redaction-at-source, WP-CLI-onl
 
 ## 8. Work packages
 
-3. **Batch migrator + checkpoints** — Support Chat: `legacy_migration_map`/`legacy_migration_message_map`/`legacy_migration_runs`/`legacy_migration_batch_log` schema; `LegacyFieldMap::REGISTRY`; Phase A backfill engine (resumable, per-conversation-transactional, dry-run, locked against concurrent runs); the `QuiescenceStateProvider` interface plus default-deny stub and test fake; the `--assume-migration-authority`-gated WP-CLI command shell. Universal Telegram: `LegacyExportServiceV1` per ADR-0008 (separate, coordinated repository work, gated on ADR-0008 merging — not performed by this plan). *Gate: ADR-0008 and its Universal Telegram pinning amendment both merged before this work package's implementation begins.*
+3. **Batch migrator + checkpoints** — Support Chat: `legacy_migration_map`/`legacy_migration_message_map`/`legacy_migration_runs`/`legacy_migration_batch_log` schema; `LegacyFieldMap::REGISTRY`; Phase A backfill engine (resumable, per-conversation-transactional, dry-run, locked against concurrent runs); the `QuiescenceStateProvider` interface plus default-deny stub and test fake; the WP-CLI command shell, gated by the mandatory `--assume-migration-authority` operator-confirmation flag. Universal Telegram: `LegacyExportServiceV1` per ADR-0008 (separate, coordinated repository work, gated on ADR-0008 merging — not performed by this plan). *Gate: ADR-0008 and its Universal Telegram pinning amendment both merged before this work package's implementation begins.*
 4. **Validators** — Phase B reconciliation-and-diff engine; count/completeness/ordering/content-integrity validation (§4.5); the "ready for cutover" gate definition (structurally unreachable without a real `QuiescenceStateProvider`, work package 2's future scope); `legacy-migrate status`/`validate` WP-CLI subcommands; the full test suite in §7. *Gate: work package 3 complete.*
 
 ## 9. Risks
