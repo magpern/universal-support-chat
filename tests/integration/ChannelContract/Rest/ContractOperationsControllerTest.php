@@ -15,6 +15,7 @@ use UniversalSupportChat\ChannelContract\Auth\PeerRepository;
 use UniversalSupportChat\ChannelContract\Auth\SignatureVerifier;
 use UniversalSupportChat\ChannelContract\ChannelStatusRepository;
 use UniversalSupportChat\ChannelContract\ContractDiscovery;
+use UniversalSupportChat\ChannelContract\HandoffMapRepository;
 use UniversalSupportChat\ChannelContract\Rest\ContractOperationDispatcher;
 use UniversalSupportChat\ChannelContract\Rest\ContractOperationsController;
 use UniversalSupportChat\Conversations\ConversationRepository;
@@ -35,6 +36,7 @@ final class ContractOperationsControllerTest extends WP_UnitTestCase {
 	private ContractOperationsController $controller;
 	private ConversationRepository $conversations;
 	private MessageRepository $messages;
+	private HandoffMapRepository $handoff_map;
 	private string $peer_id = 'universal-telegram';
 	private string $peer_secret;
 	private string $peer_key_id;
@@ -42,6 +44,7 @@ final class ContractOperationsControllerTest extends WP_UnitTestCase {
 	public function set_up(): void {
 		parent::set_up();
 		( new Migrator( new MigrationLock() ) )->maybe_migrate();
+		$this->clean_tables_committed_by_real_transactions();
 
 		$health              = new SchemaHealth();
 		$vault               = new CredentialVault();
@@ -71,9 +74,66 @@ final class ContractOperationsControllerTest extends WP_UnitTestCase {
 		);
 		$this->assertTrue( $result->ok() );
 
-		$verifier         = new SignatureVerifier( $peers, $nonces );
-		$dispatcher       = new ContractOperationDispatcher( $this->conversations, $this->messages, $channel_status, $audit );
-		$this->controller = new ContractOperationsController( $verifier, $dispatcher );
+		$verifier          = new SignatureVerifier( $peers, $nonces );
+		$this->handoff_map = new HandoffMapRepository( $health );
+		$dispatcher        = new ContractOperationDispatcher( $this->conversations, $this->messages, $channel_status, $audit, $this->handoff_map );
+		$this->controller  = new ContractOperationsController( $verifier, $dispatcher );
+	}
+
+	/**
+	 * ADR-0010 §4's `dispatch_with_provenance()` performs a real
+	 * `START TRANSACTION`/`COMMIT` for every provenance-carrying call this
+	 * class's own new tests exercise — the identical class of hazard
+	 * `QuiescenceProviderIntegrationTest::tear_down()` already documents
+	 * for Universal Telegram's own quiescence lock: a real COMMIT collapses
+	 * `WP_UnitTestCase`'s savepoint-based per-test isolation for every test
+	 * that runs afterward in the same PHPUnit process, letting this class's
+	 * own fixed `peer_id` ('universal-telegram') pairing — and any
+	 * conversation/message/handoff-map row a provenance test wrote — leak
+	 * past rollback into real, still-committed state that a later test's
+	 * own `setUp()` would otherwise collide with. Explicit cleanup here,
+	 * not reliance on the framework's own rollback, is the actual fix.
+	 */
+	public function tear_down(): void {
+		$this->clean_tables_committed_by_real_transactions();
+		parent::tear_down();
+	}
+
+	/**
+	 * Called from both `set_up()` (before this test's own fixtures) and
+	 * `tear_down()` (after). Cleaning only in `tear_down()` is not
+	 * sufficient: once a real COMMIT has broken `WP_UnitTestCase`'s
+	 * savepoint chain (see this class's own `tear_down()` docblock — now
+	 * folded into this shared helper's own reasoning), the framework's own
+	 * `parent::tear_down()` rollback-to-savepoint call can itself undo
+	 * whatever this class's own explicit cleanup just committed, if that
+	 * cleanup is not itself a real, standalone commit. Running the
+	 * identical cleanup again at the *start* of the next test's `set_up()`
+	 * — after the framework's own (possibly-inert) rollback has already
+	 * happened — is what actually guarantees a clean slate, mirroring
+	 * `QuiescenceProviderIntegrationTest`'s own established two-call
+	 * pattern.
+	 */
+	private function clean_tables_committed_by_real_transactions(): void {
+		global $wpdb;
+		$wpdb->query( 'DELETE FROM ' . $wpdb->prefix . Migrator::CHANNEL_PEERS_TABLE ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$wpdb->query( 'DELETE FROM ' . $wpdb->prefix . Migrator::CONTRACT_NONCES_TABLE ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$wpdb->query( 'DELETE FROM ' . $wpdb->prefix . Migrator::CONVERSATIONS_TABLE ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$wpdb->query( 'DELETE FROM ' . $wpdb->prefix . Migrator::CONVERSATION_MESSAGES_TABLE ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$wpdb->query( 'DELETE FROM ' . $wpdb->prefix . Migrator::CHANNEL_STATUS_TABLE ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$wpdb->query( 'DELETE FROM ' . $wpdb->prefix . Migrator::LEGACY_HANDOFF_MAP_TABLE ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+
+		// A real COMMIT already broke the ambient savepoint chain (once any
+		// test in this class reaches `dispatch_with_provenance()`'s own
+		// transaction), meaning autocommit is effectively off and every
+		// statement since — including these DELETEs — is pending inside
+		// whatever transaction is implicitly still open. An explicit COMMIT
+		// here guarantees this cleanup is durable regardless of that
+		// ambient state, so a later, unrelated test class (e.g.
+		// `VisitorRestTest`) can never observe a peer/conversation/message
+		// row this class itself created.
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$wpdb->query( 'COMMIT' );
 	}
 
 	/**
@@ -215,6 +275,169 @@ final class ContractOperationsControllerTest extends WP_UnitTestCase {
 		$this->assertSame( 200, $first->get_status() );
 		$this->assertSame( 200, $second->get_status() );
 		$this->assertCount( 1, $this->messages->list_for_conversation( $conversation->id() ) );
+	}
+
+	/**
+	 * ADR-0010 §4: a genuine cutover-replay retry (identical
+	 * source_bot_id/source_update_id, identical kind/channel_case_ref)
+	 * converges — exactly one message, exactly one handoff-map row, both
+	 * calls return 200.
+	 */
+	public function test_ingest_operator_reply_with_provenance_retry_converges_to_one_message_and_one_map_row(): void {
+		$visitor      = self::factory()->user->create();
+		$conversation = $this->conversations->create( $visitor );
+
+		$body = array(
+			'channel_case_ref' => $conversation->uuid(),
+			'body'             => 'Handed off from a deferred Telegram update',
+			'idempotency_key'  => 'tg-update-501-9001',
+			'operator_user_id' => 1,
+			'source_bot_id'    => 501,
+			'source_update_id' => 9001,
+		);
+
+		$first  = $this->controller->handle( $this->build_signed_request( 'ingest_operator_reply', $body ) );
+		$second = $this->controller->handle( $this->build_signed_request( 'ingest_operator_reply', $body ) );
+
+		$this->assertSame( 200, $first->get_status() );
+		$this->assertSame( 200, $second->get_status() );
+		$this->assertCount( 1, $this->messages->list_for_conversation( $conversation->id() ) );
+
+		$row = $this->handoff_map->find( 501, 9001 );
+		$this->assertNotNull( $row );
+		$this->assertSame( 'message', $row['kind'] );
+		$this->assertSame( $conversation->uuid(), $row['channel_case_ref'] );
+		$this->assertNotNull( $row['target_message_uuid'] );
+	}
+
+	/**
+	 * ADR-0010 §4: a second call carrying the identical
+	 * source_bot_id/source_update_id but a different `channel_case_ref`
+	 * (a genuine provenance inconsistency, never silently accepted) is
+	 * refused `409 handoff_provenance_conflict`, performs no domain write,
+	 * and leaves the original map row and its original message untouched.
+	 */
+	public function test_ingest_operator_reply_provenance_mismatch_is_refused_409_with_no_domain_write(): void {
+		$visitor       = self::factory()->user->create();
+		$conversation  = $this->conversations->create( $visitor );
+		$other_visitor = self::factory()->user->create();
+		$other         = $this->conversations->create( $other_visitor );
+
+		$first_body = array(
+			'channel_case_ref' => $conversation->uuid(),
+			'body'             => 'First, correct disposition',
+			'idempotency_key'  => 'tg-update-502-9002',
+			'operator_user_id' => 1,
+			'source_bot_id'    => 502,
+			'source_update_id' => 9002,
+		);
+		$first      = $this->controller->handle( $this->build_signed_request( 'ingest_operator_reply', $first_body ) );
+		$this->assertSame( 200, $first->get_status() );
+
+		$mismatched_body                     = $first_body;
+		$mismatched_body['channel_case_ref'] = $other->uuid();
+		$mismatched_body['idempotency_key']  = 'tg-update-502-9002-b';
+
+		$second = $this->controller->handle( $this->build_signed_request( 'ingest_operator_reply', $mismatched_body ) );
+
+		$this->assertSame( 409, $second->get_status() );
+		$this->assertSame( 'handoff_provenance_conflict', $second->get_data()['reason'] );
+
+		$this->assertCount( 1, $this->messages->list_for_conversation( $conversation->id() ) );
+		$this->assertCount( 0, $this->messages->list_for_conversation( $other->id() ), 'The mismatched retry must never write to the second conversation.' );
+
+		$row = $this->handoff_map->find( 502, 9002 );
+		$this->assertNotNull( $row );
+		$this->assertSame( $conversation->uuid(), $row['channel_case_ref'], 'The original map row must remain untouched by the refused mismatched retry.' );
+	}
+
+	/**
+	 * Live traffic (no source_bot_id/source_update_id) must never write a
+	 * handoff-map row — proving zero behavior change for every existing
+	 * call site.
+	 */
+	public function test_ingest_operator_reply_without_provenance_never_writes_a_handoff_map_row(): void {
+		$visitor      = self::factory()->user->create();
+		$conversation = $this->conversations->create( $visitor );
+
+		$response = $this->controller->handle(
+			$this->build_signed_request(
+				'ingest_operator_reply',
+				array(
+					'channel_case_ref' => $conversation->uuid(),
+					'body'             => 'Ordinary live reply',
+					'idempotency_key'  => wp_generate_uuid4(),
+					'operator_user_id' => 1,
+				)
+			)
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertNull( $this->handoff_map->find( 0, 0 ) );
+
+		global $wpdb;
+		$table = $wpdb->prefix . Migrator::LEGACY_HANDOFF_MAP_TABLE;
+		$count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$this->assertSame( 0, $count );
+	}
+
+	/**
+	 * `claim`/`release`/`resolve`/`reopen`'s already-in-target-state early
+	 * return must still run through the transactional co-write when
+	 * provenance is present — proving the wrapper covers every success
+	 * path, not only the "real transition happened" branch.
+	 */
+	public function test_duplicate_resolve_with_provenance_still_writes_exactly_one_map_row(): void {
+		$visitor      = self::factory()->user->create();
+		$conversation = $this->conversations->create( $visitor );
+		$this->conversations->transition( $conversation, ConversationStatus::OPEN );
+
+		$body = array(
+			'channel_case_ref' => $conversation->uuid(),
+			'source_bot_id'    => 503,
+			'source_update_id' => 9003,
+		);
+
+		$first  = $this->controller->handle( $this->build_signed_request( 'resolve', $body ) );
+		$second = $this->controller->handle( $this->build_signed_request( 'resolve', $body ) );
+
+		$this->assertSame( 200, $first->get_status() );
+		$this->assertSame( 200, $second->get_status(), 'The already-resolved early-return branch must also succeed as a genuine retry, not a conflict.' );
+
+		global $wpdb;
+		$table = $wpdb->prefix . Migrator::LEGACY_HANDOFF_MAP_TABLE;
+		$count = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE bot_id = %d AND update_id = %d", 503, 9003 ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$this->assertSame( 1, $count );
+	}
+
+	/**
+	 * `report_channel_unavailable` with provenance writes its own
+	 * `kind = 'channel_unavailable'` map row — proving the wrapper is
+	 * genuinely shared across operation types, not copy-pasted per
+	 * operation with a subtly different `kind`.
+	 */
+	public function test_report_channel_unavailable_with_provenance_writes_channel_unavailable_kind_row(): void {
+		$visitor      = self::factory()->user->create();
+		$conversation = $this->conversations->create( $visitor );
+
+		$response = $this->controller->handle(
+			$this->build_signed_request(
+				'report_channel_unavailable',
+				array(
+					'channel_case_ref' => $conversation->uuid(),
+					'reason_code'      => 'telegram_topic_closed',
+					'source_bot_id'    => 504,
+					'source_update_id' => 9004,
+				)
+			)
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+
+		$row = $this->handoff_map->find( 504, 9004 );
+		$this->assertNotNull( $row );
+		$this->assertSame( 'channel_unavailable', $row['kind'] );
+		$this->assertNull( $row['target_message_uuid'] );
 	}
 
 	public function test_resolve_then_reopen_round_trip(): void {

@@ -27,6 +27,7 @@ class Migrator {
 	public const LEGACY_MIGRATION_MAP_TABLE         = 'universal_support_chat_legacy_migration_map';
 	public const LEGACY_MIGRATION_MESSAGE_MAP_TABLE = 'universal_support_chat_legacy_migration_message_map';
 	public const LEGACY_MIGRATION_BATCH_LOG_TABLE   = 'universal_support_chat_legacy_migration_batch_log';
+	public const LEGACY_HANDOFF_MAP_TABLE           = 'universal_support_chat_legacy_handoff_map';
 
 	private const DB_VERSION_OPTION = 'universal_support_chat_db_version';
 
@@ -50,7 +51,7 @@ class Migrator {
 	 * Highest step number this migrator knows how to run.
 	 */
 	protected function target_version(): int {
-		return 10;
+		return 11;
 	}
 
 	/**
@@ -119,6 +120,7 @@ class Migrator {
 			8  => array( array( $this, 'step_8_add_channel_peers_outbound_route_base' ), array( $this, 'verify_step_8' ) ),
 			9  => array( array( $this, 'step_9_create_legacy_migration_tables' ), array( $this, 'verify_step_9' ) ),
 			10 => array( array( $this, 'step_10_add_legacy_migration_map_binding_columns' ), array( $this, 'verify_step_10' ) ),
+			11 => array( array( $this, 'step_11_create_legacy_handoff_map_table' ), array( $this, 'verify_step_11' ) ),
 		);
 
 		if ( ! isset( $steps[ $number ] ) ) {
@@ -803,6 +805,58 @@ class Migrator {
 		$forbidden_content_columns = array( 'body', 'body_ciphertext', 'plaintext', 'content_hash', 'digest' );
 
 		return $columns_ok && ! $this->table_has_any_column( $wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE, $forbidden_content_columns );
+	}
+
+	/**
+	 * Creates the SC-owned final-cutover handoff-provenance map (ADR-0010
+	 * §4): one row per successfully dispositioned deferred-update row,
+	 * written only inside the same transaction as the domain effect it
+	 * accompanies. `kind` is always server-derived (never client-supplied);
+	 * `channel_case_ref` is always populated (the binding UUID this call
+	 * resolved to), used for the provenance-conflict identity check on a
+	 * duplicate `(bot_id, update_id)`. `target_message_uuid` is populated
+	 * only for `kind = 'message'`. No column here is ever content-bearing.
+	 */
+	private function step_11_create_legacy_handoff_map_table(): void {
+		global $wpdb;
+
+		$table           = $wpdb->prefix . self::LEGACY_HANDOFF_MAP_TABLE;
+		$charset_collate = $wpdb->get_charset_collate();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$table} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				bot_id BIGINT UNSIGNED NOT NULL,
+				update_id BIGINT NOT NULL,
+				kind VARCHAR(24) NOT NULL,
+				channel_case_ref CHAR(36) NOT NULL,
+				target_message_uuid CHAR(36) NULL,
+				created_at DATETIME NOT NULL,
+				PRIMARY KEY (id),
+				UNIQUE KEY bot_update (bot_id, update_id)
+			) {$charset_collate}"
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	/**
+	 * Verifies the handoff-map table exists with the expected columns, and
+	 * carries no forbidden content column.
+	 */
+	private function verify_step_11(): bool {
+		global $wpdb;
+
+		$table = $wpdb->prefix . self::LEGACY_HANDOFF_MAP_TABLE;
+
+		$columns_ok = $this->table_has_columns(
+			$table,
+			array( 'id', 'bot_id', 'update_id', 'kind', 'channel_case_ref', 'target_message_uuid', 'created_at' )
+		);
+
+		$forbidden_content_columns = array( 'body', 'body_ciphertext', 'plaintext', 'content_hash', 'digest' );
+
+		return $columns_ok && ! $this->table_has_any_column( $table, $forbidden_content_columns );
 	}
 
 	/**
