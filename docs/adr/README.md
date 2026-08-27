@@ -17,8 +17,9 @@
 | 0007 | Contract v1 mutual signed adapter authentication profile |
 | 0008 | Legacy export boundary and migration authority model |
 | 0009 | Legacy binding preparation boundary and non-routing prepared status |
+| 0010 | Final cutover handoff contract and cohort activation |
 
-The next available number for any future ADR is **0010**.
+The next available number for any future ADR is **0011**.
 
 ## Immutability
 
@@ -50,3 +51,4 @@ Architecture or composition pattern; a security boundary; a persistence model; a
 - [ADR-0007 — Contract v1 mutual signed adapter authentication profile](0007-contract-v1-mutual-signed-adapter-authentication-profile.md)
 - [ADR-0008 — Legacy export boundary and migration authority model](0008-legacy-export-boundary-and-migration-authority-model.md)
 - [ADR-0009 — Legacy binding preparation boundary and non-routing prepared status](0009-legacy-binding-preparation-boundary-and-non-routing-prepared-status.md)
+- [ADR-0010 — Final cutover handoff contract and cohort activation](0010-final-cutover-handoff-contract-and-cohort-activation.md)

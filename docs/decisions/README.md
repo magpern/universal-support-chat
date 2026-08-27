@@ -4,3 +4,4 @@ Documentation-only records of Product Owner approvals for scope, product-behavio
 
 - [SC-M03 Work Packages 3–4 Legacy Migration Engine](sc-m03-wp3-wp4-legacy-migration-po-decisions.md)
 - [SC-M03 Work Package 5 Legacy Binding Preparation](sc-m03-wp5-legacy-binding-po-decisions.md)
+- [SC-M03 Final Cutover](sc-m03-final-cutover-po-decisions.md)
