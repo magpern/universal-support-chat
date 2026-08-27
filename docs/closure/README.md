@@ -14,3 +14,4 @@ Milestone and documentation-freeze closure records live in this directory.
 - [SC-M03 Work Package 5: Legacy Binding Preparation](sc-m03-work-package-5-legacy-binding-preparation-closure.md)
 - [SC-M03 Final Cutover](sc-m03-final-cutover-closure.md)
 - [SC-M03 Final-Cutover Disposable DEV Rehearsal — Tier 1](sc-m03-final-cutover-dev-rehearsal-tier1-closure.md) — halted by finding F1; primary closure in the Universal Telegram repository
+- [SC-M03 Final-Cutover F1 `channel_case_ref` Identity-Correction Implementation](sc-m03-final-cutover-f1-identity-correction-implementation-closure.md) — comment corrections only (SC #26); primary closure in the Universal Telegram repository
