@@ -315,6 +315,152 @@ final class LegacyMigrationMapRepository {
 	}
 
 	/**
+	 * Every map row eligible for a work package 5 binding attempt: already
+	 * `migrated`, never having reached a terminal binding outcome. This
+	 * single predicate is simultaneously the checkpoint (an interrupted run
+	 * resumes by re-scanning for still-`NULL` rows) and the automatic-retry
+	 * mechanism (retryable outcomes never write `binding_status`).
+	 *
+	 * @param int $limit Max rows.
+	 *
+	 * @return array<int, LegacyMigrationMapEntry>
+	 */
+	public function find_bindable( int $limit = 100 ): array {
+		if ( ! $this->schema_health->is_available() ) {
+			return array();
+		}
+
+		global $wpdb;
+
+		$table = $wpdb->prefix . Migrator::LEGACY_MIGRATION_MAP_TABLE;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE status = %s AND binding_status IS NULL ORDER BY source_conversation_id ASC LIMIT %d",
+				LegacyMigrationMapEntry::STATUS_MIGRATED,
+				$limit
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		if ( ! is_array( $rows ) ) {
+			return array();
+		}
+
+		return array_map( static fn( array $row ) => LegacyMigrationMapEntry::from_row( $row ), $rows );
+	}
+
+	/**
+	 * Records a terminal binding outcome (ADR-0009 §4) — the only writer of
+	 * `binding_status`. Also clears any stale retryable-attempt reason,
+	 * since a terminal outcome is never itself retried.
+	 *
+	 * @param int         $id           Map row primary key.
+	 * @param string      $outcome      One of `LegacyBindingOutcome`'s terminal constants.
+	 * @param string|null $binding_uuid The resulting Universal Telegram binding UUID, only for `LegacyBindingOutcome::CREATED`.
+	 */
+	public function mark_binding_terminal( int $id, string $outcome, ?string $binding_uuid = null ): bool {
+		$now = current_time( 'mysql', true );
+
+		return $this->update(
+			$id,
+			array(
+				'binding_status'              => LegacyBindingOutcome::binding_status_for( $outcome ),
+				'binding_error_reason'        => LegacyBindingOutcome::CREATED === $outcome ? null : $outcome,
+				'binding_uuid'                => $binding_uuid,
+				'binding_attempted_at'        => $now,
+				'binding_last_attempt_at'     => $now,
+				'binding_last_attempt_reason' => null,
+			),
+			array( '%s', '%s', '%s', '%s', '%s', '%s' )
+		);
+	}
+
+	/**
+	 * Records a retryable attempt (ADR-0009 §3) — never writes
+	 * `binding_status`, so this row is automatically reselected by
+	 * `find_bindable()` on the very next ordinary run.
+	 *
+	 * @param int    $id     Map row primary key.
+	 * @param string $reason One of `LegacyBindingOutcome::retryable()`'s constants.
+	 */
+	public function mark_binding_retry( int $id, string $reason ): bool {
+		return $this->update(
+			$id,
+			array(
+				'binding_last_attempt_at'     => current_time( 'mysql', true ),
+				'binding_last_attempt_reason' => $reason,
+			),
+			array( '%s', '%s' )
+		);
+	}
+
+	/**
+	 * Counts map rows per terminal binding-outcome status, plus separately
+	 * the count of rows currently retryable (attempted but not yet
+	 * terminal) and the count not yet attempted at all — the `legacy-bind
+	 * status` CLI subcommand's aggregate operational evidence.
+	 *
+	 * @return array{created:int, skipped:int, conflict:int, retryable:int, not_attempted:int}
+	 */
+	public function counts_by_binding_status(): array {
+		$counts = array(
+			'created'       => 0,
+			'skipped'       => 0,
+			'conflict'      => 0,
+			'retryable'     => 0,
+			'not_attempted' => 0,
+		);
+
+		if ( ! $this->schema_health->is_available() ) {
+			return $counts;
+		}
+
+		global $wpdb;
+
+		$table = $wpdb->prefix . Migrator::LEGACY_MIGRATION_MAP_TABLE;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
+		$by_status = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT binding_status, COUNT(*) AS total FROM {$table} WHERE status = %s AND binding_status IS NOT NULL GROUP BY binding_status",
+				LegacyMigrationMapEntry::STATUS_MIGRATED
+			),
+			ARRAY_A
+		);
+
+		if ( is_array( $by_status ) ) {
+			foreach ( $by_status as $row ) {
+				$status = (string) $row['binding_status'];
+				if ( array_key_exists( $status, $counts ) ) {
+					$counts[ $status ] = (int) $row['total'];
+				}
+			}
+		}
+
+		$retryable           = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$table} WHERE status = %s AND binding_status IS NULL AND binding_last_attempt_at IS NOT NULL",
+				LegacyMigrationMapEntry::STATUS_MIGRATED
+			)
+		);
+		$counts['retryable'] = null === $retryable ? 0 : (int) $retryable;
+
+		$not_attempted           = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$table} WHERE status = %s AND binding_status IS NULL AND binding_last_attempt_at IS NULL",
+				LegacyMigrationMapEntry::STATUS_MIGRATED
+			)
+		);
+		$counts['not_attempted'] = null === $not_attempted ? 0 : (int) $not_attempted;
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		return $counts;
+	}
+
+	/**
 	 * Applies a partial update to one map row, always bumping `updated_at`.
 	 *
 	 * @param int                   $id     Map row primary key.

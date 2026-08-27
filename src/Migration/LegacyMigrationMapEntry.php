@@ -44,6 +44,12 @@ final class LegacyMigrationMapEntry {
 	 * @param string|null $migrated_at                   When Phase B promoted this row to migrated.
 	 * @param string      $created_at                    Created at.
 	 * @param string      $updated_at                    Updated at.
+	 * @param string|null $binding_status                One of `created`|`skipped`|`conflict`, or null (work package 5, never attempted terminally).
+	 * @param string|null $binding_error_reason          A stable, typed reason if `binding_status` is `skipped`/`conflict`.
+	 * @param string|null $binding_uuid                  The resulting Universal Telegram binding UUID, if `binding_status` is `created`.
+	 * @param string|null $binding_attempted_at          When this row last reached a terminal binding outcome.
+	 * @param string|null $binding_last_attempt_at       When this row was last attempted, terminal or retryable.
+	 * @param string|null $binding_last_attempt_reason   The retryable-outcome reason from the most recent attempt, if it was retryable.
 	 */
 	public function __construct(
 		private readonly int $id,
@@ -66,7 +72,13 @@ final class LegacyMigrationMapEntry {
 		private readonly ?string $error_reason,
 		private readonly ?string $migrated_at,
 		private readonly string $created_at,
-		private readonly string $updated_at
+		private readonly string $updated_at,
+		private readonly ?string $binding_status = null,
+		private readonly ?string $binding_error_reason = null,
+		private readonly ?string $binding_uuid = null,
+		private readonly ?string $binding_attempted_at = null,
+		private readonly ?string $binding_last_attempt_at = null,
+		private readonly ?string $binding_last_attempt_reason = null
 	) {}
 
 	/**
@@ -96,7 +108,13 @@ final class LegacyMigrationMapEntry {
 			isset( $row['error_reason'] ) ? (string) $row['error_reason'] : null,
 			isset( $row['migrated_at'] ) ? (string) $row['migrated_at'] : null,
 			(string) $row['created_at'],
-			(string) $row['updated_at']
+			(string) $row['updated_at'],
+			isset( $row['binding_status'] ) ? (string) $row['binding_status'] : null,
+			isset( $row['binding_error_reason'] ) ? (string) $row['binding_error_reason'] : null,
+			isset( $row['binding_uuid'] ) ? (string) $row['binding_uuid'] : null,
+			isset( $row['binding_attempted_at'] ) ? (string) $row['binding_attempted_at'] : null,
+			isset( $row['binding_last_attempt_at'] ) ? (string) $row['binding_last_attempt_at'] : null,
+			isset( $row['binding_last_attempt_reason'] ) ? (string) $row['binding_last_attempt_reason'] : null
 		);
 	}
 
@@ -245,5 +263,50 @@ final class LegacyMigrationMapEntry {
 	 */
 	public function updated_at(): string {
 		return $this->updated_at;
+	}
+
+	/**
+	 * One of `created`|`skipped`|`conflict`, or null if this row has never
+	 * reached a terminal binding outcome (work package 5) — also the
+	 * rescan predicate.
+	 */
+	public function binding_status(): ?string {
+		return $this->binding_status;
+	}
+
+	/**
+	 * A stable, typed reason if `binding_status` is `skipped`/`conflict`.
+	 */
+	public function binding_error_reason(): ?string {
+		return $this->binding_error_reason;
+	}
+
+	/**
+	 * The resulting Universal Telegram binding UUID, if `binding_status` is `created`.
+	 */
+	public function binding_uuid(): ?string {
+		return $this->binding_uuid;
+	}
+
+	/**
+	 * When this row last reached a terminal binding outcome.
+	 */
+	public function binding_attempted_at(): ?string {
+		return $this->binding_attempted_at;
+	}
+
+	/**
+	 * When this row was last attempted, terminal or retryable.
+	 */
+	public function binding_last_attempt_at(): ?string {
+		return $this->binding_last_attempt_at;
+	}
+
+	/**
+	 * The retryable-outcome reason from the most recent attempt, if it was
+	 * retryable; null once a terminal outcome is reached.
+	 */
+	public function binding_last_attempt_reason(): ?string {
+		return $this->binding_last_attempt_reason;
 	}
 }

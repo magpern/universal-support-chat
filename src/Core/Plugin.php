@@ -40,8 +40,11 @@ use UniversalSupportChat\Conversations\RetentionCleanupHandler;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
 use UniversalSupportChat\Core\Configuration\Settings;
 use UniversalSupportChat\Core\Security\CredentialVault;
+use UniversalSupportChat\Migration\Cli\LegacyBindCommand;
 use UniversalSupportChat\Migration\Cli\LegacyMigrateCommand;
+use UniversalSupportChat\Migration\InProcessLegacyBindingImportClient;
 use UniversalSupportChat\Migration\InProcessLegacyExportClient;
+use UniversalSupportChat\Migration\LegacyBindingImportService;
 use UniversalSupportChat\Migration\LegacyMigrationBatchLogRepository;
 use UniversalSupportChat\Migration\LegacyMigrationMapRepository;
 use UniversalSupportChat\Migration\LegacyMigrationMessageMapRepository;
@@ -243,6 +246,28 @@ final class Plugin {
 			$this->phase_b_reconciliation_service,
 			$legacy_migration_map,
 			$this->legacy_migration_validator
+		) )->register();
+
+		// SC-M03 work package 5: legacy binding preparation (ADR-0009,
+		// sc-m03-wp5-existing-telegram-topic-binding-plan-v1.md). Reaches
+		// Universal Telegram only through
+		// InProcessLegacyBindingImportClient, symmetric to
+		// InProcessLegacyExportClient above; reuses the identical
+		// $quiescence provider as its own early, non-authoritative
+		// pre-check (ADR-0009 §5) — the authoritative guard is Universal
+		// Telegram's own lock-scoped assertion inside
+		// LegacyBindingImportServiceV1::import_batch(), not this instance.
+		$legacy_binding_import_client  = new InProcessLegacyBindingImportClient();
+		$legacy_binding_import_service = new LegacyBindingImportService(
+			$legacy_migration_map,
+			$legacy_binding_import_client,
+			$quiescence
+		);
+
+		( new LegacyBindCommand(
+			$legacy_binding_import_service,
+			$legacy_migration_map,
+			$quiescence
 		) )->register();
 
 		unset( $caps );

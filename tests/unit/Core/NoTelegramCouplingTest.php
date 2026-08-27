@@ -17,16 +17,19 @@ use SplFileInfo;
 final class NoTelegramCouplingTest extends TestCase {
 
 	/**
-	 * The sole, narrow, ADR-0008-authorized exceptions to this
+	 * The sole, narrow, ADR-0008/ADR-0009-authorized exceptions to this
 	 * repository's "no Universal Telegram coupling" rule: the in-process
 	 * legacy export boundary consumer (`LegacyExportClient`, the
 	 * interface, and `InProcessLegacyExportClient`, its only
-	 * implementation), and the in-process quiescence-signal consumer
+	 * implementation), the in-process quiescence-signal consumer
 	 * (`UniversalTelegramQuiescenceStateProvider`, ADR-0008 §6 /
-	 * `docs/closure/sc-m03-wp3-4-phase-b-continuous-quiescence-recheck-addendum.md`).
-	 * These three files are the entire cross-plugin reference surface —
-	 * every other file under `src/Migration/`, and everywhere else in
-	 * `src/`, remains fully decoupled and is still checked below.
+	 * `docs/closure/sc-m03-wp3-4-phase-b-continuous-quiescence-recheck-addendum.md`),
+	 * and the in-process legacy binding-preparation boundary consumer
+	 * (`LegacyBindingImportClient`, the interface, and
+	 * `InProcessLegacyBindingImportClient`, its only implementation —
+	 * ADR-0009 §2). These five files are the entire cross-plugin reference
+	 * surface — every other file under `src/Migration/`, and everywhere
+	 * else in `src/`, remains fully decoupled and is still checked below.
 	 *
 	 * @var array<int, string>
 	 */
@@ -34,6 +37,8 @@ final class NoTelegramCouplingTest extends TestCase {
 		'/src/Migration/LegacyExportClient.php',
 		'/src/Migration/InProcessLegacyExportClient.php',
 		'/src/Migration/UniversalTelegramQuiescenceStateProvider.php',
+		'/src/Migration/LegacyBindingImportClient.php',
+		'/src/Migration/InProcessLegacyBindingImportClient.php',
 	);
 
 	public function test_src_has_no_telegram_or_ut_coupling(): void {

@@ -50,7 +50,7 @@ class Migrator {
 	 * Highest step number this migrator knows how to run.
 	 */
 	protected function target_version(): int {
-		return 9;
+		return 10;
 	}
 
 	/**
@@ -109,15 +109,16 @@ class Migrator {
 	 */
 	protected function run_step( int $number ): void {
 		$steps = array(
-			1 => array( array( $this, 'step_1_create_audit_log_table' ), array( $this, 'verify_step_1' ) ),
-			2 => array( array( $this, 'step_2_create_conversations_table' ), array( $this, 'verify_step_2' ) ),
-			3 => array( array( $this, 'step_3_create_conversation_messages_table' ), array( $this, 'verify_step_3' ) ),
-			4 => array( array( $this, 'step_4_create_conversation_notes_table' ), array( $this, 'verify_step_4' ) ),
-			5 => array( array( $this, 'step_5_create_channel_peers_table' ), array( $this, 'verify_step_5' ) ),
-			6 => array( array( $this, 'step_6_create_contract_nonces_table' ), array( $this, 'verify_step_6' ) ),
-			7 => array( array( $this, 'step_7_create_channel_status_table' ), array( $this, 'verify_step_7' ) ),
-			8 => array( array( $this, 'step_8_add_channel_peers_outbound_route_base' ), array( $this, 'verify_step_8' ) ),
-			9 => array( array( $this, 'step_9_create_legacy_migration_tables' ), array( $this, 'verify_step_9' ) ),
+			1  => array( array( $this, 'step_1_create_audit_log_table' ), array( $this, 'verify_step_1' ) ),
+			2  => array( array( $this, 'step_2_create_conversations_table' ), array( $this, 'verify_step_2' ) ),
+			3  => array( array( $this, 'step_3_create_conversation_messages_table' ), array( $this, 'verify_step_3' ) ),
+			4  => array( array( $this, 'step_4_create_conversation_notes_table' ), array( $this, 'verify_step_4' ) ),
+			5  => array( array( $this, 'step_5_create_channel_peers_table' ), array( $this, 'verify_step_5' ) ),
+			6  => array( array( $this, 'step_6_create_contract_nonces_table' ), array( $this, 'verify_step_6' ) ),
+			7  => array( array( $this, 'step_7_create_channel_status_table' ), array( $this, 'verify_step_7' ) ),
+			8  => array( array( $this, 'step_8_add_channel_peers_outbound_route_base' ), array( $this, 'verify_step_8' ) ),
+			9  => array( array( $this, 'step_9_create_legacy_migration_tables' ), array( $this, 'verify_step_9' ) ),
+			10 => array( array( $this, 'step_10_add_legacy_migration_map_binding_columns' ), array( $this, 'verify_step_10' ) ),
 		);
 
 		if ( ! isset( $steps[ $number ] ) ) {
@@ -734,6 +735,74 @@ class Migrator {
 		return ! $this->table_has_any_column( $wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE, $forbidden_content_columns )
 			&& ! $this->table_has_any_column( $wpdb->prefix . self::LEGACY_MIGRATION_MESSAGE_MAP_TABLE, $forbidden_content_columns )
 			&& ! $this->table_has_any_column( $wpdb->prefix . self::LEGACY_MIGRATION_BATCH_LOG_TABLE, $forbidden_content_columns );
+	}
+
+	/**
+	 * Adds SC-M03 work package 5's binding-outcome columns to the existing
+	 * `legacy_migration_map` row (ADR-0009 §6), additive only. Terminal
+	 * outcomes write `binding_status`/`binding_error_reason`/`binding_uuid`/
+	 * `binding_attempted_at`; every attempt, terminal or retryable, writes
+	 * `binding_last_attempt_at`/`binding_last_attempt_reason` — kept
+	 * strictly separate so the retryable columns can never participate in
+	 * the `status = 'migrated' AND binding_status IS NULL` rescan
+	 * predicate.
+	 */
+	private function step_10_add_legacy_migration_map_binding_columns(): void {
+		global $wpdb;
+
+		$table = $wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE;
+
+		$columns = array(
+			'binding_status'              => "ALTER TABLE {$table} ADD COLUMN binding_status VARCHAR(16) NULL AFTER migrated_at",
+			'binding_error_reason'        => "ALTER TABLE {$table} ADD COLUMN binding_error_reason VARCHAR(191) NULL AFTER binding_status",
+			'binding_uuid'                => "ALTER TABLE {$table} ADD COLUMN binding_uuid CHAR(36) NULL AFTER binding_error_reason",
+			'binding_attempted_at'        => "ALTER TABLE {$table} ADD COLUMN binding_attempted_at DATETIME NULL AFTER binding_uuid",
+			'binding_last_attempt_at'     => "ALTER TABLE {$table} ADD COLUMN binding_last_attempt_at DATETIME NULL AFTER binding_attempted_at",
+			'binding_last_attempt_reason' => "ALTER TABLE {$table} ADD COLUMN binding_last_attempt_reason VARCHAR(191) NULL AFTER binding_last_attempt_at",
+		);
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared -- fixed table/column names.
+		// SHOW COLUMNS (this connection), not INFORMATION_SCHEMA — a DROP
+		// TABLE + recreate (or a full remigration from db_version 0) within
+		// the same PHPUnit process can otherwise leave INFORMATION_SCHEMA's
+		// cached view stale, reporting a column "exists" when the live
+		// table does not actually have it yet (the identical reasoning
+		// step_29's own column checks already document).
+		foreach ( $columns as $column => $alter_sql ) {
+			if ( empty( $wpdb->get_results( "SHOW COLUMNS FROM {$table} LIKE '{$column}'" ) ) ) {
+				$wpdb->query( $alter_sql );
+			}
+		}
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
+		if ( empty( $wpdb->get_results( "SHOW INDEX FROM {$table} WHERE Key_name = 'binding_status'" ) ) ) {
+			$wpdb->query( "ALTER TABLE {$table} ADD KEY binding_status (binding_status)" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+		}
+	}
+
+	/**
+	 * Verifies step 10's six additive columns exist, and that none of them
+	 * is a forbidden content column.
+	 */
+	private function verify_step_10(): bool {
+		global $wpdb;
+
+		$columns_ok = $this->table_has_columns(
+			$wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE,
+			array(
+				'binding_status',
+				'binding_error_reason',
+				'binding_uuid',
+				'binding_attempted_at',
+				'binding_last_attempt_at',
+				'binding_last_attempt_reason',
+			)
+		);
+
+		$forbidden_content_columns = array( 'body', 'body_ciphertext', 'plaintext', 'content_hash', 'digest' );
+
+		return $columns_ok && ! $this->table_has_any_column( $wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE, $forbidden_content_columns );
 	}
 
 	/**
