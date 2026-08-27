@@ -32,8 +32,9 @@ final class HandoffMapRepository {
 
 	/**
 	 * Looks up an existing row for `(bot_id, update_id)`, if any — used to
-	 * distinguish a genuine retry (matching `kind`/`channel_case_ref`) from
-	 * a provenance conflict (docs/adr/0010 §4).
+	 * distinguish a genuine retry (matching `kind`/`channel_case_ref`, the
+	 * latter being the Support Chat conversation UUID per ADR-0011) from a
+	 * provenance conflict (docs/adr/0010 §4).
 	 *
 	 * @param int $bot_id    Cutover-replay provenance: the source bot.
 	 * @param int $update_id Cutover-replay provenance: the source Telegram update_id.
@@ -78,7 +79,7 @@ final class HandoffMapRepository {
 	 * @param int         $bot_id               Cutover-replay provenance: the source bot.
 	 * @param int         $update_id            Cutover-replay provenance: the source Telegram update_id.
 	 * @param string      $kind                 Server-derived disposition kind — never client-supplied.
-	 * @param string      $channel_case_ref     The binding UUID this call resolved to.
+	 * @param string      $channel_case_ref     The Support Chat conversation UUID this call resolved to (ADR-0011) — never the adapter's binding UUID.
 	 * @param string|null $target_message_uuid  Populated only for `kind = 'message'`.
 	 */
 	public function insert( int $bot_id, int $update_id, string $kind, string $channel_case_ref, ?string $target_message_uuid ): void {

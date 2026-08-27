@@ -809,13 +809,16 @@ class Migrator {
 
 	/**
 	 * Creates the SC-owned final-cutover handoff-provenance map (ADR-0010
-	 * §4): one row per successfully dispositioned deferred-update row,
-	 * written only inside the same transaction as the domain effect it
-	 * accompanies. `kind` is always server-derived (never client-supplied);
-	 * `channel_case_ref` is always populated (the binding UUID this call
-	 * resolved to), used for the provenance-conflict identity check on a
-	 * duplicate `(bot_id, update_id)`. `target_message_uuid` is populated
-	 * only for `kind = 'message'`. No column here is ever content-bearing.
+	 * §4, `channel_case_ref` semantics corrected by ADR-0011): one row per
+	 * successfully dispositioned deferred-update row, written only inside
+	 * the same transaction as the domain effect it accompanies. `kind` is
+	 * always server-derived (never client-supplied); `channel_case_ref` is
+	 * always populated with the Support Chat conversation UUID this call
+	 * resolved (via `ConversationRepository::find_by_uuid()`), never the
+	 * adapter's own binding UUID, used for the provenance-conflict identity
+	 * check on a duplicate `(bot_id, update_id)`. `target_message_uuid` is
+	 * populated only for `kind = 'message'`. No column here is ever
+	 * content-bearing.
 	 */
 	private function step_11_create_legacy_handoff_map_table(): void {
 		global $wpdb;
