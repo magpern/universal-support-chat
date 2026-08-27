@@ -12,3 +12,4 @@ Milestone and documentation-freeze closure records live in this directory.
 - [SC-M03 Work Packages 3–4: Controlled Legacy Conversation Migration Engine](sc-m03-work-packages-3-4-legacy-migration-engine-closure.md)
 - [SC-M03 Work Package 2: Real Quiescence Provider and Phase B Continuous Re-check](sc-m03-wp2-phase-b-recheck-implementation-closure.md)
 - [SC-M03 Work Package 5: Legacy Binding Preparation](sc-m03-work-package-5-legacy-binding-preparation-closure.md)
+- [SC-M03 Final Cutover](sc-m03-final-cutover-closure.md)

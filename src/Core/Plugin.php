@@ -29,6 +29,7 @@ use UniversalSupportChat\ChannelContract\ContractDiscovery;
 use UniversalSupportChat\ChannelContract\Outbound\AdapterContractClient;
 use UniversalSupportChat\ChannelContract\Outbound\InProcessContractTransport;
 use UniversalSupportChat\ChannelContract\Outbound\SignatureSigner as OutboundSignatureSigner;
+use UniversalSupportChat\ChannelContract\HandoffMapRepository;
 use UniversalSupportChat\ChannelContract\Rest\ContractOperationDispatcher;
 use UniversalSupportChat\ChannelContract\Rest\ContractOperationsController;
 use UniversalSupportChat\ChatWidget\WidgetAssets;
@@ -177,7 +178,8 @@ final class Plugin {
 		$channel_status = new ChannelStatusRepository( $schema_health );
 		$pairing        = new PairingService( $peers, $audit );
 		$verifier       = new SignatureVerifier( $peers, $nonces );
-		$dispatcher     = new ContractOperationDispatcher( $conversations, $messages, $channel_status, $audit );
+		$handoff_map    = new HandoffMapRepository( $schema_health );
+		$dispatcher     = new ContractOperationDispatcher( $conversations, $messages, $channel_status, $audit, $handoff_map );
 
 		// SC-M03 work package 1: outbound Contract v1 client (ADR-0005 §4,
 		// ADR-0007). Wired here for future escalation/delivery call sites;
