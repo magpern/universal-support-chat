@@ -65,10 +65,23 @@ This closure does **not** claim: production binding execution, cutover, route sw
 
 New test files: `tests/integration/Migration/LegacyBindingImportServiceTest.php` (13 tests), `tests/integration/Migration/Cli/LegacyBindCommandTest.php` (6 tests), `tests/integration/Interop/LegacyBindingImportIntegrationTest.php` (5 tests), `tests/integration/Migration/Support/FakeLegacyBindingImportClient.php` (test double, not production code).
 
+## Ordered-merge re-validation (post-merge addendum)
+
+Performed after Universal Telegram PR #41 was corrected (a real test-isolation defect found, root-caused, and fixed in a narrowly-scoped, test-only change — see that repository's own closure record's Validation section) and reached fully green CI on both `push` and `pull_request` triggered runs, every job, on its final head `496cbdb`.
+
+1. **Universal Telegram PR #41 merged first.** Merge commit: `700f740a5dec2d1edffb4fe46b93d55e9d93492e` (`magpern/universal-telegram`, `main`).
+2. **Universal Telegram `main` fetched fresh** into the sibling checkout this repository's interop harness mounts (`/opt/biopentra/dev/universal-telegram`), confirmed at `700f740a5dec2d1edffb4fe46b93d55e9d93492e`.
+3. **This repository's real dual-plugin interop suite re-run from a freshly recreated database container** (`docker compose -f docker/docker-compose.yml -f docker/docker-compose.interop.yml down -v`, then `bin/docker/test-integration-interop.sh`) against that freshly merged Universal Telegram `main`, both supported WP/PHP pairs:
+   - `--wp-version=6.9 --php-version=8.1` (floor): **18 tests, 122 assertions — OK.**
+   - `--wp-version=7.1 --php-version=8.3` (current): **18 tests, 122 assertions — OK.**
+   Both runs are identical in count/result to the pre-merge evidence above (§ Test and CI evidence), now proven against Universal Telegram's real, merged `main` rather than only its unmerged feature branch — including the 5 `LegacyBindingImportIntegrationTest` tests confirming a real `prepared`-status binding, real idempotent rerun, real `binding_conflict_existing_active` on a pre-existing `active` binding, real non-quiescent refusal, and real `--dry-run` no-op.
+   No rebase of this branch was needed for this validation: this repository's own CI matrix does not build against the Universal Telegram sibling (only the manually-invoked interop suite does), and PR #14's own required checks (`docs`, `integration-wp-only-{floor,current}`, `phpcs`, `static-analysis`, `unit` 8.1/8.3/8.4) were confirmed still green and unchanged on head `e0a3890` immediately before merge.
+4. **SC PR #14 merged.** Merge commit: `33ba2f126efcbed73218cc7f291c1f6b50c10b62` (`magpern/universal-support-chat`, `main`).
+
 ## Product Owner acceptance
 
-Pending. This PR is opened for review and is **not merged** by this task.
+**Accepted.** Ordered merge (Universal Telegram PR #41 first, re-validated interop, then this PR) explicitly directed and reviewed by the Product Owner in this session, 2026-08-27, after the Universal Telegram-side test-isolation correction described above. Final merge SHAs: Universal Telegram `700f740a5dec2d1edffb4fe46b93d55e9d93492e`, Universal Support Chat `33ba2f126efcbed73218cc7f291c1f6b50c10b62`.
 
 ## Next task
 
-**Merge Universal Telegram PR #41** (this work package's own counterpart) to that repository's `main`, then re-run this closure's interop suite against the merged commit to confirm the real dual-plugin proof holds unchanged against `main` rather than only against the feature branch this closure's own evidence was gathered against. Only after both repositories' implementation PRs merge does SC-M03 work package 5 reach the same "implemented, Product Owner acceptance pending" state work packages 2-4 and Universal Telegram's own ADR-0039/ADR-0041 follow-ups already reached. No further work package (route switch, soak, rollback, `prepared → active` activation) may begin until this one is Product Owner accepted, per this repository's own `docs/governance.md` milestone lifecycle.
+Both repositories' SC-M03 work package 5 implementation PRs are now merged to `main`. WP5 remains preparation-only: no `prepared → active` activation mechanism exists in either repository, and no route switch, soak, rollback, production migration/binding operation, or cutover has been designed, authorized, or performed by this or any prior task in this work package. Any future work package building the `prepared → active` activation mechanism (§10 item 4 of the frozen implementation plan) is separate, later, and not started by this closure.
