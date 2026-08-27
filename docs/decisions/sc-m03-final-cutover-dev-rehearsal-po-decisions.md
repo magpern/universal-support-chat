@@ -11,8 +11,16 @@ documentation freeze; the Approval A section immediately below records the Produ
 authorization to execute Tier 1.
 
 **2026-08-27 — Tier 1 attempted and halted by finding F1.** See decision item 7 below and
-`docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md`. F1 resolution is proposed in
-ADR-0011 and Universal Telegram ADR-0043 (documentation-only, awaiting Product Owner review).
+`docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md`. F1 resolution was proposed in
+ADR-0011 and Universal Telegram ADR-0043 (documentation-only).
+
+**2026-08-27 — F1 identity-correction implementation ACCEPTED by the Product Owner.** Decision
+item 7 is now **accepted**; ADR-0011 and Universal Telegram ADR-0043 are **Accepted**. This
+authorizes **only** implementation of the frozen F1 remediation work packages — see
+"F1 implementation acceptance — recorded" under decision item 7. It authorizes no schema /
+`db_version` change, no new Contract operation, and no DEV, production, or operational cutover
+action of any kind. **Tier 1 remains halted and unexecuted; Tier 2 remains blocked on B1, B2,
+and F1.**
 
 ## Approval A — recorded
 
@@ -112,9 +120,13 @@ Approval B (primary runbook §10). Approval B **cannot take effect** before Tier
 B1 and B2 are proven resolved (isolation demonstrated, dedicated non-production Telegram
 resources provisioned).
 
-### 7. F1 resolution — `channel_case_ref` carries the Support Chat conversation UUID (Proposed)
+### 7. F1 resolution — `channel_case_ref` carries the Support Chat conversation UUID (ACCEPTED)
 
-**Status: Proposed / awaiting Product Owner.** The Tier 1 prerequisite validation was attempted
+**Status: proposed 2026-08-27; ACCEPTED by the Product Owner 2026-08-27.** The decision history
+below is preserved verbatim as first written; the "F1 implementation acceptance — recorded"
+subsection at the end of this item records the Product Owner's verbatim authorization.
+
+The Tier 1 prerequisite validation was attempted
 on 2026-08-27 and **halted at the UT→SC deferred-update handoff phase by finding F1** (closure:
 `docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md`). F1 is a pre-existing
 production seam: the Contract v1 wire field `channel_case_ref` is resolved by Support Chat as
@@ -152,9 +164,31 @@ Telegram ADR-0043**, with a remediation plan in each repo):
   an active binding is selected, no implicit UUID-equality assumption.
 - The exact stored field/source mapping was confirmed against source (UT `31519ee` / SC
   `ce46912`) before any wording was frozen — see ADR-0043 §2.1.
-- **No production action is authorized** by this decision, this freeze, or the ADRs. No schema
-  or `db_version` change. No Product Owner implementation acceptance is recorded here — that is
-  a separate later action (acceptance text: Universal Telegram remediation plan §15).
+- **No production action is authorized** by this decision or the ADRs. No schema or `db_version`
+  change.
+
+#### F1 implementation acceptance — recorded (2026-08-27)
+
+The Product Owner authorization required before F1 implementation may begin (Universal Telegram
+remediation plan §15) is recorded here verbatim:
+
+> **Product Owner authorization — SC-M03 final-cutover F1 identity-correction implementation**
+>
+> I have reviewed ADR-0043 (Universal Telegram) and ADR-0011 (Universal Support Chat) and their F1 remediation plans, frozen as documentation-only. I accept the frozen identity rule: `channel_case_ref` in Contract v1 identifies the Support Chat conversation/case (resolved via Support Chat's own conversation repository); the Universal Telegram binding UUID is a UT-owned binding identity that never crosses the Contract v1 wire; equality of the two UUIDs is never required or assumed; no Support Chat binding→conversation resolver, shared map, or UT-binding-UUID fallback is added; a missing/malformed/non-existent case reference after an active binding is selected is a classified terminal incident, never an unbounded retry.
+>
+> I authorize implementation of exactly the work packages in `docs/plans/sc-m03-final-cutover-f1-channel-case-ref-remediation-plan-v1.md` (and its Support Chat companion), pinned to the accepted baselines, in normal feature branches with per-repo CI and the interop harness. This authorizes **no** schema or `db_version` change, **no** new Contract operation, **no** DEV or production quiescence, migration, activation, route switch, cutover, deployment, release, tag, or rollback, and **no** execution of Tier 1 or Tier 2 of the DEV rehearsal.
+>
+> A Tier 1 re-attempt remains a separate authorization (a new Approval A addendum) after this implementation is merged, CI-green, and its real-binding handoff path passes, under DEV rehearsal runbook v2. Tier 2 stays blocked on B1, B2, and F1.
+
+**This acceptance authorizes only F1 implementation.** It does not authorize, and no later task
+may read it as authorizing: Tier 1 or Tier 2 of the DEV rehearsal, any DEV VPS action, any
+Telegram resource, any schema / `db_version` / plugin-version change, any new Contract
+operation, or any production or DEV quiescence, migration, cohort activation, route switch,
+cutover, deployment, soak, release, tag, rollback, deletion, or retention change.
+
+- **Companion record (Universal Telegram):** `docs/closure/sc-m03-final-cutover-f1-identity-correction-implementation-approval.md`.
+- **Acceptance PRs:** universal-support-chat `https://github.com/magpern/universal-support-chat/pull/25`; universal-telegram `https://github.com/magpern/universal-telegram/pull/52`.
+- **ADR status:** ADR-0011 (this repo) and Universal Telegram ADR-0043 are now **Accepted** (dated acceptance note in each ADR's Status section). The Status-field amendment note to ADR-0010 §4 is applied as work package WP-F1-S-3 of the implementation, per the companion plan.
 
 **Tier 1 acceptance gate.** Tier 1 halted because of F1. **Tier 1 cannot be accepted until the
 correction is implemented in both repositories and its real-binding handoff path (bindings
@@ -166,14 +200,17 @@ additionally blocked on F1.**
 
 ## Non-authorization
 
-This record authorizes nothing. It records the decisions the Product Owner must make before any
-rehearsal — Tier 1 included — may run. No rehearsal has run. No acceptance record exists; adding
-one is a later, separate Product Owner action.
+Apart from the F1 implementation acceptance recorded under decision item 7 (which authorizes
+**only** implementation of the frozen F1 remediation work packages), this record authorizes
+nothing operational. No rehearsal has run. Tier 1 remains halted and unexecuted; Tier 2 remains
+unexecuted and blocked on B1, B2, and F1. Approval A (Tier 1 re-attempt) and Approval B (Tier 2)
+remain separate, later Product Owner actions.
 
 ## Affected documents
 
 - [ADR-0010](../adr/0010-final-cutover-handoff-contract-and-cohort-activation.md) — the architecture this rehearsal exercises.
-- [ADR-0011](../adr/0011-cutover-channel-case-ref-is-support-chat-conversation-uuid.md) — F1 correction to ADR-0010 §4 `channel_case_ref` semantics (Proposed).
+- [ADR-0011](../adr/0011-cutover-channel-case-ref-is-support-chat-conversation-uuid.md) — F1 correction to ADR-0010 §4 `channel_case_ref` semantics (**Accepted** 2026-08-27).
+- [F1 implementation acceptance companion record (Universal Telegram)](https://github.com/magpern/universal-telegram/blob/main/docs/closure/sc-m03-final-cutover-f1-identity-correction-implementation-approval.md).
 - [F1 remediation plan (Support Chat companion)](../plans/sc-m03-final-cutover-f1-channel-case-ref-remediation-plan-v1.md); primary in Universal Telegram.
 - [Tier 1 closure](../closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md) — the finding of record.
 - [Support Chat companion rehearsal plan](../plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md).

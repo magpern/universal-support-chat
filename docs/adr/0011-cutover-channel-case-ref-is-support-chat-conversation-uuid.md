@@ -2,13 +2,21 @@
 
 ## Status
 
-**Proposed** — awaiting Product Owner review. Documentation-only; no code, schema, or
-`universal_support_chat_db_version` change is made by this ADR.
+**Accepted** — 2026-08-27, by the Product Owner. The verbatim authorization is recorded in
+`docs/decisions/sc-m03-final-cutover-dev-rehearsal-po-decisions.md` decision item 7 ("F1
+implementation acceptance — recorded"), with a companion record in Universal Telegram
+(`docs/closure/sc-m03-final-cutover-f1-identity-correction-implementation-approval.md`).
+Acceptance PRs: universal-support-chat #25, universal-telegram #52. Acceptance authorizes only
+implementation of the frozen F1 remediation work packages; it authorizes no schema,
+`universal_support_chat_db_version`, or plugin-version change, no new Contract operation, and no
+DEV, production, or operational cutover / rehearsal action. Documentation-only; no code or schema
+change is made by this ADR itself. Proposed 2026-08-27.
 
-**Amends ADR-0010 §4** (handoff contract). On acceptance, ADR-0010's Status field gains
-"§4 `channel_case_ref` identity and closed-vocabulary semantics amended by ADR-0011" — a
+**Amends ADR-0010 §4** (handoff contract). The Status-field amendment note on ADR-0010
+("§4 `channel_case_ref` identity and closed-vocabulary semantics amended by ADR-0011" — a
 Status-field-only change per the immutability rule; ADR-0010's Context, Decision, Alternatives,
-Consequences, and other sections are not edited.
+Consequences, and other sections are not edited) is applied as work package WP-F1-S-3 of the
+F1 implementation, per the companion remediation plan.
 
 Universal Telegram companion: **UT ADR-0043** (pins this ADR; owns the adapter-side wire change
 and the `CutoverReplayDispatcher` fail-closed classification).
