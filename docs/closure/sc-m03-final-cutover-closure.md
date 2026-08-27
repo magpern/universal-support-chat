@@ -95,3 +95,69 @@ package in this programme already reached. No further work (a real
 mutual-pairing cutover interop suite, a DEV rehearsal, or any production
 execution) may begin until this one is Product Owner accepted, per this
 repository's own `docs/governance.md` milestone lifecycle.
+
+## Addendum: mutual-pairing interop suite (correction, post-merge)
+
+Both this work package's implementation PR (SC PR #18,
+`2a259cb6b766f9bf0d81b8b5aa494b323fd9a9c5`) and Universal Telegram's own
+counterpart (UT PR #45, `4355c22dfb4e4d5796ae43da6f9b7ff17ca1c3e3`) have
+since merged to their respective `main` branches — the "not yet merged"
+framing in this record's "Status"/"Baseline" sections above reflects the
+state at the time this closure was originally written, not the current
+state; this addendum records the correction without editing that
+original text.
+
+This addendum closes the gap the "Test evidence" section above explicitly
+disclosed: no suite previously drove Universal Telegram's real
+`CutoverReplayDispatcher` all the way through a real, signed
+`SupportChatContractClient` call into this repository's own real,
+registered `ContractOperationsController`/`ContractOperationDispatcher`/
+`HandoffMapRepository`. The new suite —
+`tests/integration/Interop/CutoverHandoffIntegrationTest.php`, added on
+the Universal Telegram side (that repository's own `InteropTestCase`
+already holds the real two-way pairing this direction of the boundary
+needs; this repository has no symmetric harness pattern to extend for the
+*dispatching* side) — exercises all seven required cases: a real handoff
+creating one real SC message and one real handoff-map row then a real
+`handed_off_at` stamp; a real pre-stamp retry converging with no
+duplicate SC effect; a real supported command (`claim`) reaching the
+correct real SC operation with provenance; a real topic-lifecycle event
+reaching the real idempotent `report_channel_unavailable` path with
+provenance persisted; a real mismatched pre-existing handoff-map row
+producing this repository's real `409 handoff_provenance_conflict` with
+no new domain write; a real UT-only pre-dispatch incident making zero
+real requests to this repository's route and writing no real map row;
+and a direct read of this repository's own real handoff-map row proving
+it carries only ids/kind/uuid/timestamp columns, no reply content in any
+of them.
+
+**No defect was found in this repository's own code by this correction.**
+The one bug the new suite's own author found and fixed was in its own UT-
+side test fixture seeding (documented in full in Universal Telegram's own
+closure addendum) — this repository's `ContractOperationDispatcher`,
+`HandoffMapRepository`, and `resolve_conversation()` behaved exactly as
+already specified and already tested by this file's own 6 provenance
+tests; no `src/` file in this repository changed.
+
+**Validation** (run from the Universal Telegram checkout, this repository
+mounted as the real sibling via `docker/docker-compose.interop.yml`):
+`bin/docker/test-integration-interop.sh`, both `--wp-version=6.9
+--php-version=8.1` and `--wp-version=7.1 --php-version=8.3`, each from a
+freshly recreated disposable database container: **42 tests, 580
+assertions, OK** on both variants (35 pre-existing interop tests
+unaffected, plus the 7 new test methods above, one per required case).
+This repository's own full quality gates (phpcs, phpstan, unit, both
+integration variants) were not re-run by this addendum, since no file in
+this repository changed; they remain as recorded above.
+
+**No DEV or production rehearsal, quiescence operation, cutover,
+migration, route switch, deployment, release, tag, rollback, or data
+deletion was performed.**
+
+This closure record and Universal Telegram's own now both carry real,
+mutually-paired, live-round-trip evidence for the cutover handoff
+mechanics; the "dedicated new dual-plugin interop suite... not built in
+this closure" gap named in the "Test evidence" section above is closed by
+this addendum. The primary remaining item before any production claim is
+unchanged: a disposable DEV rehearsal exercising a real cohort
+end-to-end — not initiated by this correction.
