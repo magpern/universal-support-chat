@@ -53,4 +53,4 @@ Architecture or composition pattern; a security boundary; a persistence model; a
 - [ADR-0008 — Legacy export boundary and migration authority model](0008-legacy-export-boundary-and-migration-authority-model.md)
 - [ADR-0009 — Legacy binding preparation boundary and non-routing prepared status](0009-legacy-binding-preparation-boundary-and-non-routing-prepared-status.md)
 - [ADR-0010 — Final cutover handoff contract and cohort activation](0010-final-cutover-handoff-contract-and-cohort-activation.md)
-- [ADR-0011 — `channel_case_ref` is the Support Chat conversation UUID (F1 correction to ADR-0010 §4)](0011-cutover-channel-case-ref-is-support-chat-conversation-uuid.md) — Proposed
+- [ADR-0011 — `channel_case_ref` is the Support Chat conversation UUID (F1 correction to ADR-0010 §4)](0011-cutover-channel-case-ref-is-support-chat-conversation-uuid.md) — Accepted 2026-08-27
