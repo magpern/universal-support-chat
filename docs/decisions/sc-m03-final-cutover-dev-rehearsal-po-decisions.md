@@ -6,8 +6,13 @@
 
 Decision items 1, 3, 4, and 5 (Tier 1 scope, incident-evidence rules, Approval-A gate) are now
 in force. Decision items 2 and 6 (Tier 2 / Approval B) remain pending and Tier 2 stays blocked
-on B1 and B2. This record was created by the disposable-rehearsal documentation freeze; the
-Approval A section immediately below records the Product Owner's authorization to execute Tier 1.
+on B1, B2, **and F1** (decision item 7). This record was created by the disposable-rehearsal
+documentation freeze; the Approval A section immediately below records the Product Owner's
+authorization to execute Tier 1.
+
+**2026-08-27 — Tier 1 attempted and halted by finding F1.** See decision item 7 below and
+`docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md`. F1 resolution is proposed in
+ADR-0011 and Universal Telegram ADR-0043 (documentation-only, awaiting Product Owner review).
 
 ## Approval A — recorded
 
@@ -107,6 +112,35 @@ Approval B (primary runbook §10). Approval B **cannot take effect** before Tier
 B1 and B2 are proven resolved (isolation demonstrated, dedicated non-production Telegram
 resources provisioned).
 
+### 7. F1 resolution — `channel_case_ref` carries the Support Chat conversation UUID (Proposed)
+
+**Status: Proposed / awaiting Product Owner.** The Tier 1 prerequisite validation was attempted
+on 2026-08-27 and **halted at the UT→SC deferred-update handoff phase by finding F1** (closure:
+`docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md`). F1 is a pre-existing
+production seam: the Contract v1 wire field `channel_case_ref` is resolved by Support Chat as
+its own `conversation_uuid`, but Universal Telegram sends `$binding->binding_uuid()`, and every
+real binding mints an independent `binding_uuid`.
+
+Proposed resolution, for Product Owner review:
+
+- **Adopt option (b)** — `channel_case_ref` denotes the Support Chat `conversation_uuid` in
+  every direction; Universal Telegram sends `ChannelBinding::support_conversation_uuid()` and
+  retains `binding_uuid` only as its private binding-row identity. Support Chat's existing
+  `resolve_conversation()` behaviour becomes the ratified contract. Recorded in **ADR-0011**
+  (this repo) and **Universal Telegram ADR-0043**, with remediation plans in each repo. No
+  schema change, no `db_version` bump, no new Contract operation.
+- **Reject option (c)** — collapsing `binding_uuid` and `support_conversation_uuid` to be equal
+  at creation. The deployed binding-creation paths intentionally mint an independent
+  `binding_uuid`; formalizing equality contradicts shipped behaviour and forces an ADR-0009
+  amendment. (Product Owner direction, 2026-08-27.)
+- The exact stored field/source mapping is confirmed against source in ADR-0043 §Decision
+  before any code change.
+
+Until ADR-0011 and ADR-0043 are accepted and their remediation plans implemented (and the DEV
+rehearsal runbook revised to v2 with F1 resolution as a hard precondition), **Tier 1 is not
+re-attempted and Tier 2 is blocked on B1, B2, and F1.** Tier 1 re-attempt will require a
+separate Approval A addendum.
+
 ## Non-authorization
 
 This record authorizes nothing. It records the decisions the Product Owner must make before any
@@ -116,6 +150,9 @@ one is a later, separate Product Owner action.
 ## Affected documents
 
 - [ADR-0010](../adr/0010-final-cutover-handoff-contract-and-cohort-activation.md) — the architecture this rehearsal exercises.
+- [ADR-0011](../adr/0011-cutover-channel-case-ref-is-support-chat-conversation-uuid.md) — F1 correction to ADR-0010 §4 `channel_case_ref` semantics (Proposed).
+- [F1 remediation plan (Support Chat companion)](../plans/sc-m03-final-cutover-f1-channel-case-ref-remediation-plan-v1.md); primary in Universal Telegram.
+- [Tier 1 closure](../closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md) — the finding of record.
 - [Support Chat companion rehearsal plan](../plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md).
 - Primary operator runbook (Universal Telegram) — `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md`.
 - [SC-M03 charter](../milestones/sc-m03-controlled-migration-and-cutover.md) §0d — planning-only cross-reference added.
