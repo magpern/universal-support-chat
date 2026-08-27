@@ -22,10 +22,11 @@ use UniversalSupportChat\Privacy\Classification;
 /**
  * Runs only after SignatureVerifier has accepted a call (ADR-0007 §4): every
  * method here assumes authentication, allow-list membership, and replay
- * protection already passed. `channel_case_ref` is Support Chat's own
- * `conversation_uuid` for this work package — no adapter binding/
- * `ensure_channel_case` exists yet (SC-M03 plan v2 work package 1+); this is
- * a deliberate, documented interim convention, not a schema invention.
+ * protection already passed. `channel_case_ref` is the Support Chat
+ * conversation/case `uuid`, resolved through this plugin's own
+ * `ConversationRepository::find_by_uuid()` — ratified by ADR-0011. The
+ * Universal Telegram adapter sends `ChannelBinding::support_conversation_uuid()`;
+ * its private binding UUID never crosses this contract.
  *
  * SC-M03 final-cutover (ADR-0010 §4): six of these operations —
  * `ingest_operator_reply`, `claim`, `release`, `resolve`, `reopen`,
@@ -464,7 +465,7 @@ final class ContractOperationDispatcher {
 	 *
 	 * @param array<string, mixed> $body             Decoded JSON request body.
 	 * @param string               $kind              Server-derived disposition kind for this operation.
-	 * @param string               $channel_case_ref  The binding UUID this call resolved to.
+	 * @param string               $channel_case_ref  The Support Chat conversation UUID this call resolved to (ADR-0011) — never the adapter's binding UUID.
 	 * @param callable(): array{status: int, body: array<string, mixed>} $domain_work The operation's own domain effect and response.
 	 *
 	 * @return array{status: int, body: array<string, mixed>}
@@ -537,8 +538,10 @@ final class ContractOperationDispatcher {
 	}
 
 	/**
-	 * Resolves `channel_case_ref` to a conversation. Interim convention:
-	 * `channel_case_ref` is the Support Chat `conversation_uuid`.
+	 * Resolves `channel_case_ref` to a conversation. Per ADR-0011,
+	 * `channel_case_ref` is the Support Chat `conversation_uuid`; a
+	 * malformed or unknown value returns `null`, and the caller fails
+	 * closed (`404 not_found`), never a fallback.
 	 *
 	 * @param array<string, mixed> $body Decoded JSON request body.
 	 */
