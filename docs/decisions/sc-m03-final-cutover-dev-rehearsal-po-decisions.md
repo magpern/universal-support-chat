@@ -6,8 +6,13 @@
 
 Decision items 1, 3, 4, and 5 (Tier 1 scope, incident-evidence rules, Approval-A gate) are now
 in force. Decision items 2 and 6 (Tier 2 / Approval B) remain pending and Tier 2 stays blocked
-on B1 and B2. This record was created by the disposable-rehearsal documentation freeze; the
-Approval A section immediately below records the Product Owner's authorization to execute Tier 1.
+on B1, B2, **and F1** (decision item 7). This record was created by the disposable-rehearsal
+documentation freeze; the Approval A section immediately below records the Product Owner's
+authorization to execute Tier 1.
+
+**2026-08-27 — Tier 1 attempted and halted by finding F1.** See decision item 7 below and
+`docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md`. F1 resolution is proposed in
+ADR-0011 and Universal Telegram ADR-0043 (documentation-only, awaiting Product Owner review).
 
 ## Approval A — recorded
 
@@ -107,6 +112,58 @@ Approval B (primary runbook §10). Approval B **cannot take effect** before Tier
 B1 and B2 are proven resolved (isolation demonstrated, dedicated non-production Telegram
 resources provisioned).
 
+### 7. F1 resolution — `channel_case_ref` carries the Support Chat conversation UUID (Proposed)
+
+**Status: Proposed / awaiting Product Owner.** The Tier 1 prerequisite validation was attempted
+on 2026-08-27 and **halted at the UT→SC deferred-update handoff phase by finding F1** (closure:
+`docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md`). F1 is a pre-existing
+production seam: the Contract v1 wire field `channel_case_ref` is resolved by Support Chat as
+its own `conversation_uuid`, but Universal Telegram sends `$binding->binding_uuid()`, and every
+real binding mints an independent `binding_uuid`.
+
+The identity rule, for Product Owner review (recorded in **ADR-0011** here and **Universal
+Telegram ADR-0043**, with a remediation plan in each repo):
+
+- **`channel_case_ref` means the Support Chat conversation / case UUID** — the SC-owned case
+  identity — in every Contract v1 operation, both directions, live and cutover-replay. Support
+  Chat resolves it through its existing authoritative conversation repository (`find_by_uuid()`),
+  unchanged. The `legacy_handoff_map.channel_case_ref` value is that conversation UUID (already
+  the code's behaviour).
+- **The Universal Telegram binding UUID remains UT-local** — used for binding lookup, lifecycle,
+  activation, routing identity, and idempotency keys — and **never crosses the Contract v1
+  wire**. Universal Telegram sends `ChannelBinding::support_conversation_uuid()` (an existing
+  `NOT NULL`, `UNIQUE` column on every binding row, populated from the SC conversation UUID at
+  creation).
+- **Option (c) — requiring `binding_uuid == support_conversation_uuid` — is rejected.** The
+  deployed creation paths (`LegacyBindingImportServiceV1`, `EnsureChannelCaseService`)
+  intentionally mint an independent `binding_uuid`; equality must never be required or used as a
+  workaround. (Product Owner direction, 2026-08-27.)
+- **An SC-side binding→conversation resolution mechanism is rejected** — no new lookup table,
+  no direct Universal Telegram SQL, no shared map, no fallback interpreting a UT binding UUID as
+  an SC identifier — **unless separately designed later** in its own ADR with its own
+  justification.
+- **Any deterministic Support Chat refusal after an active binding has been selected fails
+  closed with a classified terminal outcome** — new closed incident codes
+  `unresolved_case_reference` (`404 not_found`) and `handoff_rejected` (the deterministic
+  `400`/`409` refusals) — never an unbounded transient retry that blocks replay without an
+  outcome. Only genuinely transient conditions (`503 request_failed`, `401 contract_auth_failed`,
+  transport / unavailable / unpaired peer) stay retryable. The classification is **exhaustive**
+  (Universal Telegram ADR-0043 §3): no generic fallback, no fallback to legacy processing once
+  an active binding is selected, no implicit UUID-equality assumption.
+- The exact stored field/source mapping was confirmed against source (UT `31519ee` / SC
+  `ce46912`) before any wording was frozen — see ADR-0043 §2.1.
+- **No production action is authorized** by this decision, this freeze, or the ADRs. No schema
+  or `db_version` change. No Product Owner implementation acceptance is recorded here — that is
+  a separate later action (acceptance text: Universal Telegram remediation plan §15).
+
+**Tier 1 acceptance gate.** Tier 1 halted because of F1. **Tier 1 cannot be accepted until the
+correction is implemented in both repositories and its real-binding handoff path (bindings
+created by `LegacyBindingImportServiceV1` / `EnsureChannelCaseService`, not equality fixtures)
+passes green in the interop harness.** Until then Tier 1's status is "attempted → halted by F1".
+A Tier 1 re-attempt requires a separate Approval A addendum and runs only under DEV rehearsal
+runbook v2. **Tier 2 retains its B1 and B2 blockers and its unexecuted status, and is
+additionally blocked on F1.**
+
 ## Non-authorization
 
 This record authorizes nothing. It records the decisions the Product Owner must make before any
@@ -116,6 +173,9 @@ one is a later, separate Product Owner action.
 ## Affected documents
 
 - [ADR-0010](../adr/0010-final-cutover-handoff-contract-and-cohort-activation.md) — the architecture this rehearsal exercises.
+- [ADR-0011](../adr/0011-cutover-channel-case-ref-is-support-chat-conversation-uuid.md) — F1 correction to ADR-0010 §4 `channel_case_ref` semantics (Proposed).
+- [F1 remediation plan (Support Chat companion)](../plans/sc-m03-final-cutover-f1-channel-case-ref-remediation-plan-v1.md); primary in Universal Telegram.
+- [Tier 1 closure](../closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md) — the finding of record.
 - [Support Chat companion rehearsal plan](../plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md).
 - Primary operator runbook (Universal Telegram) — `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md`.
 - [SC-M03 charter](../milestones/sc-m03-controlled-migration-and-cutover.md) §0d — planning-only cross-reference added.

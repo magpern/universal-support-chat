@@ -150,3 +150,33 @@ before the DEV rehearsal — even the Tier 1 prerequisite — may be executed.
 - This companion plan and the [decision record](../decisions/sc-m03-final-cutover-dev-rehearsal-po-decisions.md) are committed on a documentation-only branch, reviewed, CI-green, and merged, alongside the Universal Telegram primary runbook.
 - Registries, the plan index, the decisions index, and the milestone §0d page are updated **planning-only** — every touched line states that no rehearsal has run and Product Owner execution approval is outstanding.
 - No acceptance record is added; that is a later Product Owner action.
+
+---
+
+## Amendment A — 2026-08-27 — Tier 1 halt (finding F1) and correction gate (non-design status note)
+
+Post-freeze **status amendment** — no design section above is changed; the design revision is a
+new file, `sc-m03-final-cutover-dev-rehearsal-plan-v2.md` (not yet written).
+
+- **Tier 1 was executed and HALTED** at the UT→SC deferred-update handoff phase by **finding
+  F1** — closure `docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md` (this repo,
+  merge `fcbfaa773ef63661b6d8ce42962f10bb174588f8`; Universal Telegram closure +
+  characterization test, merge `98c602543bd67bc471e2a88468d175fb6e659b46`).
+- **F1**: `ContractOperationDispatcher::resolve_conversation()` resolves `channel_case_ref` as
+  this repository's `conversation_uuid` (correct), but Universal Telegram sent the UT
+  `binding_uuid`; every real binding mints an independent one. Secondary defect: Universal
+  Telegram's `CutoverReplayDispatcher::finish()` treated the `404 not_found` as an unbounded
+  transient retry.
+- **Correction frozen** (documentation-only, Proposed): **ADR-0011** (this repo; amends
+  ADR-0010 §4) + **Universal Telegram ADR-0043**, and
+  `docs/plans/sc-m03-final-cutover-f1-channel-case-ref-remediation-plan-v1.md`. This repository's
+  resolver, `dispatch_with_provenance()`, and `legacy_handoff_map` shape are **already correct**
+  and unchanged; only comments (C1–C4) are corrected. No schema / `db_version` change.
+- **Tier 1 acceptance gate**: Tier 1 **cannot be accepted** until the correction is implemented
+  in both repositories and its real-binding handoff path passes green in the interop harness. A
+  Tier 1 re-attempt needs a **separate Approval A addendum** under runbook **v2**.
+- **Tier 2** retains its **B1**/**B2** blockers and **unexecuted** status, and is **additionally
+  blocked on F1**.
+- No Product Owner implementation acceptance for F1 is recorded by this amendment — see
+  [decision record](../decisions/sc-m03-final-cutover-dev-rehearsal-po-decisions.md) item 7 and
+  the remediation plan §15 (Universal Telegram).
