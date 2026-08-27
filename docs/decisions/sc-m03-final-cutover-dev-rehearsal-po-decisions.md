@@ -121,25 +121,44 @@ production seam: the Contract v1 wire field `channel_case_ref` is resolved by Su
 its own `conversation_uuid`, but Universal Telegram sends `$binding->binding_uuid()`, and every
 real binding mints an independent `binding_uuid`.
 
-Proposed resolution, for Product Owner review:
+The identity rule, for Product Owner review (recorded in **ADR-0011** here and **Universal
+Telegram ADR-0043**, with a remediation plan in each repo):
 
-- **Adopt option (b)** — `channel_case_ref` denotes the Support Chat `conversation_uuid` in
-  every direction; Universal Telegram sends `ChannelBinding::support_conversation_uuid()` and
-  retains `binding_uuid` only as its private binding-row identity. Support Chat's existing
-  `resolve_conversation()` behaviour becomes the ratified contract. Recorded in **ADR-0011**
-  (this repo) and **Universal Telegram ADR-0043**, with remediation plans in each repo. No
-  schema change, no `db_version` bump, no new Contract operation.
-- **Reject option (c)** — collapsing `binding_uuid` and `support_conversation_uuid` to be equal
-  at creation. The deployed binding-creation paths intentionally mint an independent
-  `binding_uuid`; formalizing equality contradicts shipped behaviour and forces an ADR-0009
-  amendment. (Product Owner direction, 2026-08-27.)
-- The exact stored field/source mapping is confirmed against source in ADR-0043 §Decision
-  before any code change.
+- **`channel_case_ref` means the Support Chat conversation / case UUID** — the SC-owned case
+  identity — in every Contract v1 operation, both directions, live and cutover-replay. Support
+  Chat resolves it through its existing authoritative conversation repository (`find_by_uuid()`),
+  unchanged. The `legacy_handoff_map.channel_case_ref` value is that conversation UUID (already
+  the code's behaviour).
+- **The Universal Telegram binding UUID remains UT-local** — used for binding lookup, lifecycle,
+  activation, routing identity, and idempotency keys — and **never crosses the Contract v1
+  wire**. Universal Telegram sends `ChannelBinding::support_conversation_uuid()` (an existing
+  `NOT NULL`, `UNIQUE` column on every binding row, populated from the SC conversation UUID at
+  creation).
+- **Option (c) — requiring `binding_uuid == support_conversation_uuid` — is rejected.** The
+  deployed creation paths (`LegacyBindingImportServiceV1`, `EnsureChannelCaseService`)
+  intentionally mint an independent `binding_uuid`; equality must never be required or used as a
+  workaround. (Product Owner direction, 2026-08-27.)
+- **An SC-side binding→conversation resolution mechanism is rejected** — no new lookup table,
+  no direct Universal Telegram SQL, no shared map, no fallback interpreting a UT binding UUID as
+  an SC identifier — **unless separately designed later** in its own ADR with its own
+  justification.
+- **A missing, malformed, or non-existent case reference fails closed with a classified
+  terminal outcome** — a new closed incident code `unresolved_case_reference` after an active
+  binding has been selected — never an unbounded transient retry that blocks replay without an
+  outcome. No fallback to legacy processing once an active binding is selected.
+- The exact stored field/source mapping was confirmed against source (UT `31519ee` / SC
+  `ce46912`) before any wording was frozen — see ADR-0043 §2.1.
+- **No production action is authorized** by this decision, this freeze, or the ADRs. No schema
+  or `db_version` change. No Product Owner implementation acceptance is recorded here — that is
+  a separate later action (acceptance text: Universal Telegram remediation plan §15).
 
-Until ADR-0011 and ADR-0043 are accepted and their remediation plans implemented (and the DEV
-rehearsal runbook revised to v2 with F1 resolution as a hard precondition), **Tier 1 is not
-re-attempted and Tier 2 is blocked on B1, B2, and F1.** Tier 1 re-attempt will require a
-separate Approval A addendum.
+**Tier 1 acceptance gate.** Tier 1 halted because of F1. **Tier 1 cannot be accepted until the
+correction is implemented in both repositories and its real-binding handoff path (bindings
+created by `LegacyBindingImportServiceV1` / `EnsureChannelCaseService`, not equality fixtures)
+passes green in the interop harness.** Until then Tier 1's status is "attempted → halted by F1".
+A Tier 1 re-attempt requires a separate Approval A addendum and runs only under DEV rehearsal
+runbook v2. **Tier 2 retains its B1 and B2 blockers and its unexecuted status, and is
+additionally blocked on F1.**
 
 ## Non-authorization
 
