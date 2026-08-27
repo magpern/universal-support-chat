@@ -2,11 +2,27 @@
 
 ## Status
 
-**Proposed / awaiting Product Owner.**
+**Approval A recorded — Tier 1 authorized. Tier 2 (Approval B) still awaiting Product Owner.**
 
-No decision below is in force. This record is created by the disposable-rehearsal documentation
-freeze so that the questions requiring Product Owner sign-off are stated explicitly and in one
-place. Nothing here authorizes execution of any rehearsal.
+Decision items 1, 3, 4, and 5 (Tier 1 scope, incident-evidence rules, Approval-A gate) are now
+in force. Decision items 2 and 6 (Tier 2 / Approval B) remain pending and Tier 2 stays blocked
+on B1 and B2. This record was created by the disposable-rehearsal documentation freeze; the
+Approval A section immediately below records the Product Owner's authorization to execute Tier 1.
+
+## Approval A — recorded
+
+> Product Owner authorizes SC-M03 final-cutover Tier 1 prerequisite validation exactly as
+> specified in the merged disposable-rehearsal runbooks, pinned to Universal Telegram
+> `31519ee3ae297369118bf2deda6eae05d13a3d8b` and Universal Support Chat
+> `ce4691241eb843485117b323516899df916fdaf7`.
+>
+> This authorizes only fresh throwaway checkouts and the disposable container/PHPUnit interop
+> harness, synthetic fixtures, and zero Telegram network traffic. It does not authorize Tier 2,
+> any DEV VPS action, any Telegram resource, or any production quiescence, migration, activation,
+> route switch, cutover, deployment, release, tag, rollback, deletion, or retention change.
+
+Companion record in Universal Telegram: `docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval.md`.
+**This acceptance does not authorize Tier 2.**
 
 ## Decision owner
 

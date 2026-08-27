@@ -39,7 +39,7 @@ This foundation documentation freeze includes boundary plans for the initial roa
 | [sc-m03-wp3-wp4-legacy-migration-engine-plan-v1.md](sc-m03-wp3-wp4-legacy-migration-engine-plan-v1.md) | SC-M03 work packages 3–4 detail (ADR-0008 authorization) |
 | [sc-m03-wp5-existing-telegram-topic-binding-plan-v1.md](sc-m03-wp5-existing-telegram-topic-binding-plan-v1.md) | SC-M03 work package 5 detail (ADR-0009 authorization) |
 | [sc-m03-final-cutover-plan-v1.md](sc-m03-final-cutover-plan-v1.md) | SC-M03 final cutover detail (ADR-0010 authorization; documentation freeze only, no implementation) |
-| [sc-m03-final-cutover-dev-rehearsal-plan-v1.md](sc-m03-final-cutover-dev-rehearsal-plan-v1.md) | SC-M03 final-cutover disposable DEV rehearsal — Support Chat companion (primary runbook in Universal Telegram; planning-only; **no rehearsal has run**; Tier 1 pending Approval A, Tier 2 blocked on B1/B2 and pending Approval B; authorizes no operational action) |
+| [sc-m03-final-cutover-dev-rehearsal-plan-v1.md](sc-m03-final-cutover-dev-rehearsal-plan-v1.md) | SC-M03 final-cutover disposable DEV rehearsal — Support Chat companion (primary runbook in Universal Telegram; Tier 1 authorized (Approval A recorded), Tier 2 blocked on B1/B2 and pending Approval B; authorizes no operational action beyond the disposable Tier 1 harness) |
 | [sc-m04-telegram-optional-acceptance-plan-v1.md](sc-m04-telegram-optional-acceptance-plan-v1.md) | SC-M04 |
 | [sc-m05-professional-widget-experience-plan-v1.md](sc-m05-professional-widget-experience-plan-v1.md) | SC-M05 |
 | [sc-m06-support-availability-and-offline-tickets-plan-v1.md](sc-m06-support-availability-and-offline-tickets-plan-v1.md) | SC-M06 |
