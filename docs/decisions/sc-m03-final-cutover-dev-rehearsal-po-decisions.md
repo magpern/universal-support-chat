@@ -142,10 +142,14 @@ Telegram ADR-0043**, with a remediation plan in each repo):
   no direct Universal Telegram SQL, no shared map, no fallback interpreting a UT binding UUID as
   an SC identifier — **unless separately designed later** in its own ADR with its own
   justification.
-- **A missing, malformed, or non-existent case reference fails closed with a classified
-  terminal outcome** — a new closed incident code `unresolved_case_reference` after an active
-  binding has been selected — never an unbounded transient retry that blocks replay without an
-  outcome. No fallback to legacy processing once an active binding is selected.
+- **Any deterministic Support Chat refusal after an active binding has been selected fails
+  closed with a classified terminal outcome** — new closed incident codes
+  `unresolved_case_reference` (`404 not_found`) and `handoff_rejected` (the deterministic
+  `400`/`409` refusals) — never an unbounded transient retry that blocks replay without an
+  outcome. Only genuinely transient conditions (`503 request_failed`, `401 contract_auth_failed`,
+  transport / unavailable / unpaired peer) stay retryable. The classification is **exhaustive**
+  (Universal Telegram ADR-0043 §3): no generic fallback, no fallback to legacy processing once
+  an active binding is selected, no implicit UUID-equality assumption.
 - The exact stored field/source mapping was confirmed against source (UT `31519ee` / SC
   `ce46912`) before any wording was frozen — see ADR-0043 §2.1.
 - **No production action is authorized** by this decision, this freeze, or the ADRs. No schema

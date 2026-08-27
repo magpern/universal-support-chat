@@ -41,10 +41,14 @@ What is wrong is the *documentation* that calls the field "the binding UUID":
 gains the note.
 
 **Closed incident vocabulary.** ADR-0010 §4 references the closed incident vocabulary that
-Universal Telegram ADR-0042 §4 owns. ADR-0011 and Universal Telegram ADR-0043 extend it by one
-code — `unresolved_case_reference` — for a `channel_case_ref` that cannot be resolved after an
-active binding has been selected. The dispatcher change is Universal Telegram's; this repository
-already produces the `404 not_found` that triggers it and needs **no runtime change** for it.
+Universal Telegram ADR-0042 §4 owns. ADR-0011 and Universal Telegram ADR-0043 extend it by two
+codes — `unresolved_case_reference` (SC `404 not_found` after active-binding selection) and
+`handoff_rejected` (every other deterministic SC refusal: `400 invalid_body` /
+`400 invalid_operator` / `400 unsupported_operation` / `409 already_claimed` /
+`409 claimed_by_other` / `409 invalid_transition`). The dispatcher classification change is
+Universal Telegram's (ADR-0043 §3, an exhaustive table with no generic retry fallback); this
+repository already produces the `404`/`400`/`409` responses that trigger them and needs **no
+runtime change** for them.
 
 ## 3. Assumptions and open questions
 
@@ -90,8 +94,10 @@ succeeds for every binding state. No SC-side compatibility shim, dual-read, or b
 - A provenance mismatch on `(source_bot_id, source_update_id)` → `409
   handoff_provenance_conflict`, rollback, no writes. Unchanged.
 - Universal Telegram's `CutoverReplayDispatcher` converts the `404` into a durable
-  `unresolved_case_reference` incident (its concern); Support Chat emits no incident and writes
-  no row.
+  `unresolved_case_reference` incident, and the deterministic `400`/`409` refusals into a
+  `handoff_rejected` incident (its concern, ADR-0043 §3); Support Chat emits no incident and
+  writes no `legacy_handoff_map` row for any of them (`resolve_conversation()` `null` and every
+  `4xx`/`409` path return before `$domain_work` / the map insert).
 
 ## 8. Test and CI impact
 

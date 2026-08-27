@@ -112,16 +112,21 @@ and fixes the surrounding statements and the fail-closed gap:
      malformed or unknown ref and the handler returns `404 not_found`; no domain write, no map
      write. Unchanged.
    - The **closed incident vocabulary** shared with Universal Telegram ADR-0042 §4/§5 (and named
-     in ADR-0010 §4) is extended by one code — `unresolved_case_reference` — for the case where
-     the deferred-replay dispatcher has already selected an **active** binding but Support Chat
-     cannot resolve the `channel_case_ref` it was given. Under the corrected wire that value is
-     the conversation UUID, so a `404` there means a genuine Support Chat data-integrity problem,
-     not a transient one. Universal Telegram ADR-0043 owns the dispatcher change that records
-     this as a durable UT-only incident (blocking `replaying → idle` and `confirm-complete`,
-     resolvable only by a real retry that succeeds or by the existing
-     `cutover incident-acknowledge` terminal path). Genuinely transient failures (Support Chat
-     unreachable, `503`, not-paired, discovery-incompatible) stay retryable and are **not**
-     incidents — unchanged.
+     in ADR-0010 §4) is extended by two codes — `unresolved_case_reference` (Support Chat
+     `404 not_found` after an active binding is selected: the `channel_case_ref`, now a
+     conversation UUID, resolves to nothing — a data-integrity problem, not a transient one) and
+     `handoff_rejected` (every other deterministic Support Chat refusal after active-binding
+     selection: `400 invalid_body` / `400 invalid_operator` / `400 unsupported_operation` /
+     `409 already_claimed` / `409 claimed_by_other` / `409 invalid_transition`). Universal
+     Telegram ADR-0043 owns the dispatcher change that records these as durable UT-only incidents
+     (blocking `replaying → idle` and `confirm-complete`, resolvable only by a real retry that
+     succeeds or by the existing `cutover incident-acknowledge` terminal path). Only genuinely
+     transient conditions stay retryable and are **not** incidents: Support Chat `503
+     request_failed`, `401 contract_auth_failed`, and the client-side transport / unavailable /
+     unpaired / discovery-incompatible / signing-unavailable gates. `409
+     handoff_provenance_conflict` keeps its existing incident code. The classification is
+     **exhaustive** — Universal Telegram ADR-0043 §3 tabulates every Contract outcome; no
+     generic fallback remains that could create an unbounded silent retry.
    - There is no fallback to legacy processing once an active binding has been selected (the
      cutover-replay dispatcher already has no such fallthrough); no implicit UUID-equality
      assumption anywhere; no silent retry loop that can block replay forever without an outcome.
@@ -174,8 +179,8 @@ and fixes the surrounding statements and the fail-closed gap:
   `LegacyBindingImportServiceV1` / `EnsureChannelCaseService`; this repository's interop-side
   fixtures (`InteropTestCase` conversation minting) are aligned so no test requires the two UUIDs
   to be equal.
-- One new closed incident code, `unresolved_case_reference`, is added to the vocabulary
-  ADR-0010 §4 references and Universal Telegram ADR-0042 §4 owns.
+- Two new closed incident codes, `unresolved_case_reference` and `handoff_rejected`, are added
+  to the vocabulary ADR-0010 §4 references and Universal Telegram ADR-0042 §4 owns.
 - The Tier 1 rehearsal is re-attempted (runbook v2) only after this ADR and Universal Telegram
   ADR-0043 are accepted and their remediation plans implemented and merged, and its
   real-binding handoff path passes. Tier 2 stays blocked on B1, B2, and F1.
@@ -199,9 +204,9 @@ touched.
 - `docs/adr/README.md` — ADR-0011 row; next available number becomes 0012.
 - `docs/plans/sc-m03-final-cutover-f1-channel-case-ref-remediation-plan-v1.md` — new; the
   Support Chat comment-correction and fixture-alignment work packages.
-- `docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md` — immutable (frozen plan); the F1
-  halt and acceptance gate are recorded in the decision record and closure, not by editing the
-  plan; runbook v2 is an implementation-phase deliverable.
+- `docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md` — a dated non-design "Amendment A"
+  status footer records the F1 halt and the Tier 1 acceptance gate; the design sections are
+  unchanged and the design revision is runbook v2 (an implementation-phase deliverable).
 - `docs/decisions/sc-m03-final-cutover-dev-rehearsal-po-decisions.md` — decision item 7 (adopt
   this ADR; reject alternatives (1)/(2); Tier 1 acceptance gate).
 - `docs/milestones/sc-m03-controlled-migration-and-cutover.md` — §0d planning note.
