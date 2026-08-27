@@ -38,6 +38,15 @@ Recovery from any failure discovered after cohort activation is forward-only (AD
 
 The resolution frozen in ADR-0010 §6 / ADR-0042 (route an active-binding topic's lifecycle service message to `report_channel_unavailable` before any legacy mutation, retaining existing legacy behavior only when no active binding exists) is approved as the correct, sole resolution. No alternative (e.g. leaving the cross-talk as an accepted, documented risk) is adopted.
 
+## Documentation-freeze acceptance — implementation authorized
+
+**Accepted, 2026-08-27.** The Product Owner accepts the SC-M03 final-cutover documentation freeze as recorded by:
+
+- Support Chat ADR-0010, merged `be7461544a39c7ad074164d21e3c1b04c71f2fc2`
+- Universal Telegram ADR-0042, merged `15067671c5234cce975e939150a631bb8f9e56c8`
+
+**This authorizes implementation only, and only within the exact scope and safety boundaries those two documents state.** It does not authorize, and no future task may treat this acceptance as authorizing, production cutover, migration, route switching, deployment, soak, rollback, or deletion — each of those remains gated behind its own, separate, later, explicitly approved task, per ADR-0010 §1 and this repository's `docs/governance.md` freeze model.
+
 ## Affected Documents/Milestones
 
 - [ADR-0010](../adr/0010-final-cutover-handoff-contract-and-cohort-activation.md) — references this record for the product-scope questions it does not itself resolve.
