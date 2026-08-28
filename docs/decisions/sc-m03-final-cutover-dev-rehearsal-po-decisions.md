@@ -2,13 +2,16 @@
 
 ## Status
 
-**Approval A recorded — Tier 1 authorized. Tier 2 (Approval B) still awaiting Product Owner.**
+**F1 correction MERGED (see Addendum B). Tier 1 halted attempt stands — a re-attempt needs the
+proposed Approval A addendum under runbook v2. Tier 2 (Approval B) still awaiting Product Owner,
+blocked on B1 and B2.**
 
-Decision items 1, 3, 4, and 5 (Tier 1 scope, incident-evidence rules, Approval-A gate) are now
-in force. Decision items 2 and 6 (Tier 2 / Approval B) remain pending and Tier 2 stays blocked
-on B1, B2, **and F1** (decision item 7). This record was created by the disposable-rehearsal
-documentation freeze; the Approval A section immediately below records the Product Owner's
-authorization to execute Tier 1.
+Decision items 1, 3, 4, and 5 (Tier 1 scope, incident-evidence rules, Approval-A gate) and item
+7 (F1 identity-correction implementation acceptance — now implemented and merged) are recorded.
+Decision items 2 and 6 (Tier 2 / Approval B) remain pending; Tier 2 stays blocked on B1 and B2.
+The original Approval A was consumed by the halted 2026-08-27 Tier 1 attempt; **Addendum B**
+below carries the F1-merge status, DEV rehearsal runbook v2, and the **proposed, unsigned**
+Approval A addendum for a Tier 1 re-attempt.
 
 **2026-08-27 — Tier 1 attempted and halted by finding F1.** See decision item 7 below and
 `docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md`. F1 resolution was proposed in
@@ -198,13 +201,67 @@ A Tier 1 re-attempt requires a separate Approval A addendum and runs only under 
 runbook v2. **Tier 2 retains its B1 and B2 blockers and its unexecuted status, and is
 additionally blocked on F1.**
 
+## Addendum B — 2026-08-28 — F1 correction merged; DEV rehearsal runbook v2; proposed Approval A addendum
+
+Explicitly labelled addendum. It records subsequent status; no decision item above is edited.
+
+- **F1 implementation and its closure are MERGED in both repositories.** universal-support-chat
+  #26 → `9144cb1e2362c2be8d4c74f1461bba7ffe236575` (comment corrections C1–C4 only — no runtime,
+  schema, `universal_support_chat_db_version`, resolver, or Contract-operation change) / closure
+  #27 → `5d81b5b7795ee50f3a79e535a483d7677b36d1c0`. universal-telegram #53 →
+  `7d4cc4fecb97f862721cea0fec427ade26b46ea7` (adapter sends `support_conversation_uuid()` as
+  `channel_case_ref`; `binding_uuid` off the wire; new exhaustive fail-closed
+  `CutoverReplayFailureClassifier` — `unresolved_case_reference` / `handoff_rejected`) / closure
+  #54 → `32f17ea904a33cdd1f9b0225ba9638f95a09d883`. The real dual-plugin interop suite passed
+  **OK (47 tests, 722 assertions)** on both supported WP/PHP variants post-merge. Closure:
+  [F1 implementation closure](../closure/sc-m03-final-cutover-f1-identity-correction-implementation-closure.md).
+- **F1 is no longer a code blocker.** Tier 1's status is still "attempted 2026-08-27 → halted by
+  F1"; it remains **unexecuted and unaccepted**. A Tier 1 re-attempt requires a **separate
+  Approval A addendum** (the original Approval A was consumed by the halted run) and runs only
+  under **DEV rehearsal runbook v2**.
+- **DEV rehearsal runbook v2** supersedes v1: primary
+  `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v2.md`;
+  Support Chat companion [`sc-m03-final-cutover-dev-rehearsal-plan-v2.md`](../plans/sc-m03-final-cutover-dev-rehearsal-plan-v2.md).
+  Pins universal-telegram `32f17ea904a33cdd1f9b0225ba9638f95a09d883` /
+  universal-support-chat `5d81b5b7795ee50f3a79e535a483d7677b36d1c0`. It revises only the
+  F1-invalidated portions of v1 (wire identity, Run 1 handoff fixture/assertions with a real
+  distinct `binding_uuid`, the exhaustive fail-closed classifier referenced by Runs 2 and 3, a
+  new Run 1 F1-correction gate, new Run 3 fail-closed incident scenarios, and the exact Tier 1
+  re-run pass/fail evidence). All v1 safety boundaries, evidence/redaction/teardown requirements,
+  the Tier 1/Tier 2 distinction, and blockers B1–B5 are carried forward.
+- **Tier 2** stays blocked on **B1 and B2** and pending **Approval B** (unchanged).
+
+### Proposed Approval A addendum text (Tier 1 re-attempt under runbook v2) — NOT signed, NOT recorded
+
+Reproduced verbatim from the Universal Telegram primary runbook v2 §10.3 and
+`docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md` (Status: Proposed —
+awaiting Product Owner signature):
+
+> **Product Owner authorization — SC-M03 final-cutover Tier 1 prerequisite validation, re-attempt under DEV rehearsal runbook v2 (Approval A addendum)**
+>
+> The original Approval A (`docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval.md`) was consumed by the Tier 1 attempt of 2026-08-27, which was correctly halted by finding F1. F1 has since been corrected and merged in both repositories (universal-telegram #53 → `7d4cc4fecb97f862721cea0fec427ade26b46ea7`, closure #54 → `32f17ea904a33cdd1f9b0225ba9638f95a09d883`; universal-support-chat #26 → `9144cb1e2362c2be8d4c74f1461bba7ffe236575`, closure #27 → `5d81b5b7795ee50f3a79e535a483d7677b36d1c0`) and verified green by the real dual-plugin interop suite on both supported WP/PHP variants.
+>
+> I authorize a **single Tier 1 re-attempt** of the SC-M03 final-cutover disposable automated operational-sequence / integration validation, exactly as described in DEV rehearsal runbook **v2** and its Support Chat companion, pinned to universal-telegram `32f17ea904a33cdd1f9b0225ba9638f95a09d883` and universal-support-chat `5d81b5b7795ee50f3a79e535a483d7677b36d1c0` (freshly fetched `origin/main`, both HEAD).
+>
+> This authorization is limited to: the container/PHPUnit interop harness only (`docker/docker-compose.yml` + `docker/docker-compose.interop.yml`, `docker compose … down -v` before and after every run); fresh throwaway repository checkouts at the two pinned SHAs above; entirely synthetic fixture data created by the rehearsal's own code; Runs 1, 2, and 3 of runbook v2 §7, including the Run 1 step 11a F1-correction gate and the Run 3 `unresolved_case_reference` / `handoff_rejected` incident scenarios; both supported WP/PHP variants, each in a fresh disposable database.
+>
+> It does **NOT** authorize, under any circumstance: Tier 2 or any disposable DEV rehearsal; any action against `/opt/biopentra/dev/*`, `dev.biopentra.eu`, its database, its Redis, its bot(s), its webhook, its SWAG vhost, or any existing conversation; any Telegram network traffic whatsoever — no bot token (real or dedicated), no `setWebhook`, no `sendMessage`, no group or topic action, no `api.telegram.org` request; any real, dedicated, or newly-created Telegram bot, supergroup, or topic; any real user, operator, or production conversation data in any fixture; any isolated-instance, container, network, volume, DNS, certificate, or credential creation; any production or DEV quiescence window, migration, binding preparation, cohort activation, deferred-update replay outside the disposable harness, route switch, cutover, soak, deployment, release, tag, rollback, deletion, or retention change; any acknowledge, overwrite, hand-edit, or repair of an incident row to make a run pass, and any use of `cutover incident-acknowledge` outside the explicitly synthetic §7.5 scenario; any schema, `Migrator::target_version()`, `universal_support_chat_db_version`, plugin-version, Contract-operation, configuration, CI-workflow, or test change.
+>
+> The operator must halt on any runbook v2 §8.2 hard stop condition and escalate to me. A Tier 1 re-run is PASS only when every §9.2 evidence item is captured (redacted per §5) and teardown is proven; Run 3 legitimately ends "blocked-as-designed" without reaching `confirm-complete`.
+>
+> Approval B (Tier 2) remains a separate, later authorization and cannot take effect until this Tier 1 re-attempt passes and B1 and B2 are proven resolved.
+>
+> Signed: __________________________  Date: __________
+
+**This addendum records nothing as accepted.** The Approval A addendum is Proposed and unsigned.
+
 ## Non-authorization
 
 Apart from the F1 implementation acceptance recorded under decision item 7 (which authorizes
-**only** implementation of the frozen F1 remediation work packages), this record authorizes
-nothing operational. No rehearsal has run. Tier 1 remains halted and unexecuted; Tier 2 remains
-unexecuted and blocked on B1, B2, and F1. Approval A (Tier 1 re-attempt) and Approval B (Tier 2)
-remain separate, later Product Owner actions.
+**only** implementation of the frozen F1 remediation work packages — now merged), this record
+authorizes nothing operational. No rehearsal has run under v1 or v2. Tier 1 remains halted and
+unexecuted; Tier 2 remains unexecuted and blocked on B1 and B2. The Approval A addendum (Tier 1
+re-attempt under v2) and Approval B (Tier 2) remain separate, later Product Owner actions.
 
 ## Affected documents
 
@@ -213,8 +270,9 @@ remain separate, later Product Owner actions.
 - [F1 implementation acceptance companion record (Universal Telegram)](https://github.com/magpern/universal-telegram/blob/main/docs/closure/sc-m03-final-cutover-f1-identity-correction-implementation-approval.md).
 - [F1 remediation plan (Support Chat companion)](../plans/sc-m03-final-cutover-f1-channel-case-ref-remediation-plan-v1.md); primary in Universal Telegram.
 - [Tier 1 closure](../closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md) — the finding of record.
-- [Support Chat companion rehearsal plan](../plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md).
-- Primary operator runbook (Universal Telegram) — `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md`.
+- [Support Chat companion rehearsal plan v1](../plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md) (superseded) and [companion v2](../plans/sc-m03-final-cutover-dev-rehearsal-plan-v2.md) (current).
+- [F1 implementation closure (Support Chat)](../closure/sc-m03-final-cutover-f1-identity-correction-implementation-closure.md).
+- Primary operator runbook (Universal Telegram) — v1 `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md` (superseded); **v2** `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v2.md` (current); proposed Approval A addendum `https://github.com/magpern/universal-telegram/blob/main/docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md`.
 - [SC-M03 charter](../milestones/sc-m03-controlled-migration-and-cutover.md) §0d — planning-only cross-reference added.
 
 ## Compatibility / Migration impact
