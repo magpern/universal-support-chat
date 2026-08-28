@@ -879,7 +879,7 @@ class Migrator {
 		$table           = $wpdb->prefix . self::TELEGRAM_DISPATCH_TABLE;
 		$charset_collate = $wpdb->get_charset_collate();
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
 		$wpdb->query(
 			"CREATE TABLE IF NOT EXISTS {$table} (
 				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -893,15 +893,33 @@ class Migrator {
 				channel_case_ref CHAR(36) NULL,
 				last_reason VARCHAR(191) NULL,
 				next_attempt_at DATETIME NOT NULL,
+				claimed_at DATETIME NULL,
+				lease_expires_at DATETIME NULL,
 				created_at DATETIME NOT NULL,
 				updated_at DATETIME NOT NULL,
 				PRIMARY KEY (id),
 				UNIQUE KEY message_uuid (message_uuid),
 				KEY state_due (state, next_attempt_at),
+				KEY state_lease (state, lease_expires_at),
 				KEY conversation_id (conversation_id)
 			) {$charset_collate}"
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		// Additive, in case an earlier (pre-release) build of this step
+		// created the table without the crash-recovery lease columns.
+		// SHOW COLUMNS on this connection, not INFORMATION_SCHEMA — same
+		// reasoning as step 10.
+		foreach (
+			array(
+				'claimed_at'       => "ALTER TABLE {$table} ADD COLUMN claimed_at DATETIME NULL AFTER next_attempt_at",
+				'lease_expires_at' => "ALTER TABLE {$table} ADD COLUMN lease_expires_at DATETIME NULL AFTER claimed_at",
+			) as $column => $alter_sql
+		) {
+			if ( empty( $wpdb->get_results( "SHOW COLUMNS FROM {$table} LIKE '{$column}'" ) ) ) {
+				$wpdb->query( $alter_sql );
+			}
+		}
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
 	}
 
 	/**
@@ -927,6 +945,8 @@ class Migrator {
 				'channel_case_ref',
 				'last_reason',
 				'next_attempt_at',
+				'claimed_at',
+				'lease_expires_at',
 				'created_at',
 				'updated_at',
 			)

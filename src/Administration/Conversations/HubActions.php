@@ -128,13 +128,20 @@ final class HubActions {
 			$this->redirect( 0, 'invalid' );
 		}
 
-		$message = $this->messages->create(
+		$create = fn (): ?ConversationMessage => $this->messages->create(
 			$conversation->id(),
 			ConversationMessage::DIRECTION_OPERATOR,
 			$text,
 			'stored',
 			null
 		);
+
+		// When Telegram dispatch is enabled the message row and its outbox
+		// row are written in one transaction (ADR-0012); otherwise this is
+		// a plain message create.
+		$message = null !== $this->dispatch
+			? $this->dispatch->persist_and_enqueue( $conversation->uuid(), $create )
+			: $create();
 
 		if ( null === $message ) {
 			$this->redirect( $conversation_id, 'reply_failed' );
@@ -171,10 +178,6 @@ final class HubActions {
 			),
 			Classification::INTERNAL
 		);
-
-		if ( null !== $this->dispatch ) {
-			$this->dispatch->enqueue_message( $message, $conversation->uuid() );
-		}
 
 		$this->redirect( $conversation_id, 'reply_sent' );
 	}

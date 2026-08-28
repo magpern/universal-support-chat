@@ -4,9 +4,10 @@
  * universal-support-chat (this checkout) and universal-telegram (the real
  * sibling checkout, linked into wp-content/plugins by
  * tests/bin/install-universal-telegram.sh) as "MU plugins" for the
- * WordPress test framework, so the interop suite exercises real
- * `LegacyExportServiceV1` (Universal Telegram, ADR-0008) code against this
- * repository's real migration engine in one disposable WordPress install.
+ * WordPress test framework, so the interop suite exercises the real
+ * signed Contract v1 boundary between the two plugins in one disposable
+ * WordPress install (ADR-0012 automatic dispatch;
+ * `TelegramDispatchInteropTest`).
  *
  * @package UniversalSupportChat
  */
@@ -23,11 +24,10 @@ if ( ! $wp_tests_dir ) {
 require_once $wp_tests_dir . '/includes/functions.php';
 
 /**
- * Loads both plugins under test. Universal Telegram migrates its own
- * schema and boots `LegacyExportServiceV1` on its own `plugins_loaded`
- * hook — no separate installer call is needed, mirroring how the
- * Universal Telegram repository's own interop bootstrap treats this
- * repository.
+ * Loads both plugins under test. Each plugin migrates its own schema and
+ * boots its own composition root on its own `plugins_loaded` hook — no
+ * separate installer call is needed, mirroring how the Universal Telegram
+ * repository's own interop bootstrap treats this repository.
  */
 function universal_support_chat_interop_manually_load_plugins() {
 	$ut_main = WP_PLUGIN_DIR . '/universal-telegram/universal-telegram.php';

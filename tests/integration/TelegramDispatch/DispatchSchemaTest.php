@@ -32,6 +32,8 @@ final class DispatchSchemaTest extends WP_UnitTestCase {
 		$this->assertContains( 'conversation_uuid', $columns );
 		$this->assertContains( 'state', $columns );
 		$this->assertContains( 'next_attempt_at', $columns );
+		$this->assertContains( 'claimed_at', $columns );
+		$this->assertContains( 'lease_expires_at', $columns );
 
 		foreach ( array( 'body', 'body_ciphertext', 'plaintext', 'content_hash', 'digest', 'text' ) as $forbidden ) {
 			$this->assertNotContains( $forbidden, $columns, "dispatch table must not carry `{$forbidden}`" );

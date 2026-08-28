@@ -40,6 +40,8 @@ final class DispatchRecord {
 	 * @param string|null $channel_case_ref  Resolved adapter channel case ref, if any.
 	 * @param string|null $last_reason       Last non-secret failure/skip reason.
 	 * @param string      $next_attempt_at   When the row next becomes due (UTC mysql).
+	 * @param string|null $claimed_at        When the current `delivering` claim was taken (UTC mysql), if any.
+	 * @param string|null $lease_expires_at  When the current `delivering` claim lease expires (UTC mysql), if any.
 	 * @param string      $created_at        Created at (UTC mysql).
 	 * @param string      $updated_at        Updated at (UTC mysql).
 	 */
@@ -55,6 +57,8 @@ final class DispatchRecord {
 		private readonly ?string $channel_case_ref,
 		private readonly ?string $last_reason,
 		private readonly string $next_attempt_at,
+		private readonly ?string $claimed_at,
+		private readonly ?string $lease_expires_at,
 		private readonly string $created_at,
 		private readonly string $updated_at
 	) {}
@@ -137,6 +141,20 @@ final class DispatchRecord {
 	}
 
 	/**
+	 * When the current `delivering` claim was taken (UTC mysql), if any.
+	 */
+	public function claimed_at(): ?string {
+		return $this->claimed_at;
+	}
+
+	/**
+	 * When the current `delivering` claim lease expires (UTC mysql), if any.
+	 */
+	public function lease_expires_at(): ?string {
+		return $this->lease_expires_at;
+	}
+
+	/**
 	 * Created at (UTC mysql).
 	 */
 	public function created_at(): string {
@@ -168,6 +186,8 @@ final class DispatchRecord {
 			isset( $row['channel_case_ref'] ) && '' !== (string) $row['channel_case_ref'] ? (string) $row['channel_case_ref'] : null,
 			isset( $row['last_reason'] ) && '' !== (string) $row['last_reason'] ? (string) $row['last_reason'] : null,
 			(string) $row['next_attempt_at'],
+			isset( $row['claimed_at'] ) && '' !== (string) $row['claimed_at'] ? (string) $row['claimed_at'] : null,
+			isset( $row['lease_expires_at'] ) && '' !== (string) $row['lease_expires_at'] ? (string) $row['lease_expires_at'] : null,
 			(string) $row['created_at'],
 			(string) $row['updated_at']
 		);

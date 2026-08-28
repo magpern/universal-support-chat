@@ -76,6 +76,17 @@ final class TelegramDispatchService {
 	}
 
 	/**
+	 * Reclaims rows stranded in `delivering` by a crashed worker, back to a
+	 * retryable state. Runs regardless of whether the feature is currently
+	 * enabled, so toggling dispatch off does not permanently strand a row.
+	 *
+	 * @return int Number of rows reclaimed.
+	 */
+	public function reclaim_stale(): int {
+		return $this->outbox->reclaim_expired_leases();
+	}
+
+	/**
 	 * Processes up to $limit due outbox rows.
 	 *
 	 * @param int $limit Maximum rows to process this pass.
@@ -89,6 +100,8 @@ final class TelegramDispatchService {
 		$abandoned = 0;
 
 		if ( ! $this->is_enabled() ) {
+			$this->reclaim_stale();
+
 			return compact( 'processed', 'delivered', 'failed', 'abandoned' );
 		}
 

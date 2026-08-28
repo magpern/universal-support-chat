@@ -9,12 +9,14 @@ use UniversalSupportChat\Audit\AuditLogger;
 use UniversalSupportChat\ChannelContract\ChannelStatusRepository;
 use UniversalSupportChat\ChannelContract\HandoffMapRepository;
 use UniversalSupportChat\ChannelContract\Rest\ContractOperationDispatcher;
+use UniversalSupportChat\Conversations\Conversation;
 use UniversalSupportChat\Conversations\ConversationRepository;
 use UniversalSupportChat\Conversations\ConversationStatus;
 use UniversalSupportChat\Conversations\MessageRepository;
 use UniversalSupportChat\Conversations\Rest\ConversationsController;
 use UniversalSupportChat\Core\Configuration\Settings;
 use UniversalSupportChat\Core\Security\CredentialVault;
+use UniversalSupportChat\Persistence\MigrationFailureCode;
 use UniversalSupportChat\Persistence\MigrationLock;
 use UniversalSupportChat\Persistence\Migrator;
 use UniversalSupportChat\Persistence\SchemaHealth;
@@ -23,8 +25,15 @@ use UniversalSupportChat\TelegramDispatch\DispatchEnqueuer;
 use UniversalSupportChat\TelegramDispatch\DispatchOutboxRepository;
 use UniversalSupportChat\TelegramDispatch\DispatchRecord;
 use WP_REST_Request;
+use WP_REST_Response;
 use WP_UnitTestCase;
 
+/**
+ * The enabled path opens a real transaction (ADR-0012), which implicitly
+ * commits WP_UnitTestCase's own wrapping transaction, so rows written here
+ * survive the test — every test explicitly cleans the relevant tables on
+ * both set_up and tear_down.
+ */
 final class DispatchWiringTest extends WP_UnitTestCase {
 
 	private SchemaHealth $health;
@@ -36,6 +45,7 @@ final class DispatchWiringTest extends WP_UnitTestCase {
 	public function set_up(): void {
 		parent::set_up();
 		( new Migrator( new MigrationLock() ) )->maybe_migrate();
+		$this->truncate_committed_tables();
 
 		$this->health        = new SchemaHealth();
 		$vault               = new CredentialVault();
@@ -47,69 +57,116 @@ final class DispatchWiringTest extends WP_UnitTestCase {
 		update_option( Settings::OPTION_NAME, array( 'telegram_dispatch_enabled' => true ) );
 	}
 
-	private function controller(): ConversationsController {
-		return new ConversationsController( $this->health, $this->conversations, $this->messages, $this->enqueuer );
+	public function tear_down(): void {
+		$this->truncate_committed_tables();
+		parent::tear_down();
 	}
 
-	private function post_visitor_message( string $conversation_uuid, int $user_id, string $text ): \WP_REST_Response {
-		wp_set_current_user( $user_id );
+	private function truncate_committed_tables(): void {
+		global $wpdb;
+
+		foreach (
+			array(
+				Migrator::TELEGRAM_DISPATCH_TABLE,
+				Migrator::CONVERSATION_NOTES_TABLE,
+				Migrator::CONVERSATION_MESSAGES_TABLE,
+				Migrator::CHANNEL_STATUS_TABLE,
+				Migrator::CONVERSATIONS_TABLE,
+				Migrator::AUDIT_LOG_TABLE,
+			) as $table_constant
+		) {
+			$table = $wpdb->prefix . $table_constant;
+			$wpdb->query( "DELETE FROM {$table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- test cleanup.
+		}
+	}
+
+	private function controller( ?DispatchEnqueuer $enqueuer ): ConversationsController {
+		return new ConversationsController( $this->health, $this->conversations, $this->messages, $enqueuer );
+	}
+
+	private function post_visitor_message( ?DispatchEnqueuer $enqueuer, Conversation $conversation, string $text, ?string $key = null ): WP_REST_Response {
+		wp_set_current_user( $conversation->owner_user_id() );
 		$_SERVER['HTTP_X_WP_NONCE']   = wp_create_nonce( 'wp_rest' );
-		$request                      = new WP_REST_Request( 'POST', '/universal-support-chat/v1/conversations/' . $conversation_uuid . '/messages' );
-		$request['conversation_uuid'] = $conversation_uuid;
+		$request                      = new WP_REST_Request( 'POST', '/universal-support-chat/v1/conversations/' . $conversation->uuid() . '/messages' );
+		$request['conversation_uuid'] = $conversation->uuid();
 		$request->set_param( 'text', $text );
+		if ( null !== $key ) {
+			$request->set_param( 'idempotency_key', $key );
+		}
 
-		return $this->controller()->handle_post_message( $request );
+		return $this->controller( $enqueuer )->handle_post_message( $request );
 	}
 
-	public function test_visitor_message_is_enqueued_when_enabled(): void {
+	private function open_conversation(): Conversation {
 		$user         = self::factory()->user->create();
 		$conversation = $this->conversations->create( $user );
-		$this->conversations->transition( $conversation, ConversationStatus::OPEN );
+		$opened       = $this->conversations->transition( $conversation, ConversationStatus::OPEN );
 
-		$response = $this->post_visitor_message( $conversation->uuid(), $user, 'Hi there' );
+		return $opened ?? $conversation;
+	}
+
+	public function test_visitor_message_and_outbox_row_commit_together(): void {
+		$conversation = $this->open_conversation();
+
+		$response = $this->post_visitor_message( $this->enqueuer, $conversation, 'Hi there' );
 		$this->assertTrue( $response->get_data()['ok'] );
 
-		$record = $this->outbox->find( $response->get_data()['message_uuid'] );
+		$message_uuid = $response->get_data()['message_uuid'];
+		$this->assertNotNull( $this->messages->find_by_uuid( $message_uuid ) );
+
+		$record = $this->outbox->find( $message_uuid );
 		$this->assertNotNull( $record );
 		$this->assertSame( DispatchRecord::STATE_PENDING, $record->state() );
 		$this->assertSame( 'visitor', $record->direction() );
 		$this->assertSame( $conversation->uuid(), $record->conversation_uuid() );
 	}
 
-	public function test_visitor_message_is_not_enqueued_when_disabled(): void {
+	public function test_outbox_write_failure_rolls_back_the_message(): void {
+		// An outbox whose schema is unavailable: enqueue() cannot write.
+		$broken_schema = new SchemaHealth();
+		$broken_schema->mark_unavailable( MigrationFailureCode::STEP_FAILED );
+		$broken_enqueuer = new DispatchEnqueuer( new Settings(), new DispatchOutboxRepository( $broken_schema ) );
+
+		$conversation = $this->open_conversation();
+		$before       = count( $this->messages->list_for_conversation( $conversation->id() ) );
+
+		$response = $this->post_visitor_message( $broken_enqueuer, $conversation, 'should not persist' );
+
+		// Atomic: no message is left behind without an outbox row.
+		$this->assertFalse( $response->get_data()['ok'] );
+		$this->assertSame( 503, $response->get_status() );
+		$this->assertCount( $before, $this->messages->list_for_conversation( $conversation->id() ) );
+		$this->assertSame( array(), $this->outbox->count_by_state() );
+	}
+
+	public function test_disabled_path_does_not_touch_the_outbox(): void {
 		update_option( Settings::OPTION_NAME, array( 'telegram_dispatch_enabled' => false ) );
-		$user         = self::factory()->user->create();
-		$conversation = $this->conversations->create( $user );
-		$this->conversations->transition( $conversation, ConversationStatus::OPEN );
 
-		$response = $this->post_visitor_message( $conversation->uuid(), $user, 'Hi there' );
+		$conversation = $this->open_conversation();
+		$response     = $this->post_visitor_message( $this->enqueuer, $conversation, 'Still works' );
 
+		$this->assertTrue( $response->get_data()['ok'] );
+		$this->assertNotEmpty( $response->get_data()['message_uuid'] );
 		$this->assertNull( $this->outbox->find( $response->get_data()['message_uuid'] ) );
 	}
 
-	public function test_normal_visitor_flow_is_preserved_when_outbox_schema_is_gone(): void {
-		global $wpdb;
-		$table = $wpdb->prefix . Migrator::TELEGRAM_DISPATCH_TABLE;
-		$wpdb->query( "DROP TABLE IF EXISTS {$table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	public function test_idempotent_message_retry_does_not_roll_back_when_outbox_row_already_exists(): void {
+		$conversation = $this->open_conversation();
+		$key          = wp_generate_uuid4();
 
-		$user         = self::factory()->user->create();
-		$conversation = $this->conversations->create( $user );
-		$this->conversations->transition( $conversation, ConversationStatus::OPEN );
+		$first = $this->post_visitor_message( $this->enqueuer, $conversation, 'first', $key );
+		$this->assertTrue( $first->get_data()['ok'] );
 
-		$response = $this->post_visitor_message( $conversation->uuid(), $user, 'Still works' );
-
-		// The message is still stored and the response is still a success —
-		// dispatch failure must never surface to the visitor.
-		$this->assertTrue( $response->get_data()['ok'] );
-		$this->assertNotEmpty( $response->get_data()['message_uuid'] );
-
-		( new Migrator( new MigrationLock() ) )->maybe_migrate();
+		// Same idempotency key: MessageRepository returns the existing
+		// message and the outbox row already exists — must still be a 200,
+		// not a rolled-back 503.
+		$second = $this->post_visitor_message( $this->enqueuer, $conversation, 'first', $key );
+		$this->assertTrue( $second->get_data()['ok'] );
+		$this->assertSame( $first->get_data()['message_uuid'], $second->get_data()['message_uuid'] );
 	}
 
 	public function test_telegram_originated_operator_reply_is_marked_suppressed_and_never_loops(): void {
-		$user         = self::factory()->user->create();
-		$conversation = $this->conversations->create( $user );
-		$this->conversations->transition( $conversation, ConversationStatus::OPEN );
+		$conversation = $this->open_conversation();
 
 		$dispatcher = new ContractOperationDispatcher(
 			$this->conversations,
@@ -131,14 +188,11 @@ final class DispatchWiringTest extends WP_UnitTestCase {
 		);
 
 		$this->assertSame( 200, $result['status'] );
-		$message_uuid = $result['body']['message_uuid'];
-
-		$record = $this->outbox->find( $message_uuid );
+		$record = $this->outbox->find( $result['body']['message_uuid'] );
 		$this->assertNotNull( $record );
 		$this->assertSame( DispatchRecord::STATE_SUPPRESSED, $record->state() );
 		$this->assertSame( DispatchRecord::ORIGIN_TELEGRAM, $record->origin() );
 
-		// The worker must never pick it up.
 		$this->assertSame( array(), $this->outbox->claim_due( 20 ) );
 	}
 }

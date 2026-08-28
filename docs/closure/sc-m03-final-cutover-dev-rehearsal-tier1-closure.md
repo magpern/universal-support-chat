@@ -40,11 +40,16 @@ Universal Telegram `528a92e2f285f979626fe68620f531bcc2ca93a9`.
   `exit` → replay every buffered row through **legacy `process_update()`** → backlog 0 + `idle` →
   re-`enter`/`confirm` → Phase B rerun promotes to `migrated`) is proven end-to-end against the
   real Universal Telegram stack by
-  [`tests/integration/Interop/QuiescenceProviderIntegrationTest.php`](../../tests/integration/Interop/QuiescenceProviderIntegrationTest.php)
+  `tests/integration/Interop/QuiescenceProviderIntegrationTest.php`
   tests 4 and 5. This path never invokes the handoff, so **F1 does not apply to it** — the Run 2
   recovery core PASSES.
 - **`legacy-bind` producing a non-routing `prepared` binding** — proven by
-  [`tests/integration/Interop/LegacyBindingImportIntegrationTest.php`](../../tests/integration/Interop/LegacyBindingImportIntegrationTest.php).
+  `tests/integration/Interop/LegacyBindingImportIntegrationTest.php`.
+
+> Historical note (feature/sc-telegram-adapter-dispatch): the two interop test files named
+> above (and `SchemaInventoryTest` / `LegacyExportClientIntegrationTest`) were retired when
+> Universal Telegram ADR-0044 removed the legacy-chat / SC-M03 classes they load. This closure
+> record is left otherwise unchanged as the historical account of the halted Tier 1 attempt.
 - **The handoff-contract handler** (`ContractOperationDispatcher::dispatch_with_provenance()`,
   `HandoffMapRepository`, the `409 handoff_provenance_conflict` path, no-plaintext column shape) —
   proven by `tests/integration/ChannelContract/Rest/ContractOperationsControllerTest.php` and the

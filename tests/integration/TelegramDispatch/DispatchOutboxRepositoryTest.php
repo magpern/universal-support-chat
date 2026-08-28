@@ -19,6 +19,13 @@ final class DispatchOutboxRepositoryTest extends WP_UnitTestCase {
 	public function set_up(): void {
 		parent::set_up();
 		( new Migrator( new MigrationLock() ) )->maybe_migrate();
+
+		// Another test file's enabled path commits real rows (it opens an
+		// explicit transaction); clear any that leaked in.
+		global $wpdb;
+		$table = $wpdb->prefix . Migrator::TELEGRAM_DISPATCH_TABLE;
+		$wpdb->query( "DELETE FROM {$table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- test cleanup.
+
 		$this->outbox = new DispatchOutboxRepository( new SchemaHealth() );
 	}
 
@@ -81,6 +88,39 @@ final class DispatchOutboxRepositoryTest extends WP_UnitTestCase {
 		$reclaimed = $this->outbox->claim_due( 20 );
 		$this->assertCount( 1, $reclaimed );
 		$this->assertSame( 2, $reclaimed[0]->attempts() );
+	}
+
+	public function test_claim_takes_a_lease_and_expired_leases_are_reclaimed(): void {
+		global $wpdb;
+
+		$uuid = wp_generate_uuid4();
+		$this->outbox->enqueue( $uuid, 1, wp_generate_uuid4(), 'visitor' );
+		$claimed = $this->outbox->claim_due( 1 )[0];
+
+		$leased = $this->outbox->find_by_id( $claimed->id() );
+		$this->assertNotNull( $leased->claimed_at() );
+		$this->assertNotNull( $leased->lease_expires_at() );
+
+		// Not reclaimed while the lease is live.
+		$this->assertSame( 0, $this->outbox->reclaim_expired_leases() );
+
+		// Expire it.
+		$wpdb->update(
+			$wpdb->prefix . Migrator::TELEGRAM_DISPATCH_TABLE,
+			array( 'lease_expires_at' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ),
+			array( 'id' => $claimed->id() ),
+			array( '%s' ),
+			array( '%d' )
+		);
+
+		$this->assertSame( 1, $this->outbox->reclaim_expired_leases() );
+		$reclaimed = $this->outbox->find_by_id( $claimed->id() );
+		$this->assertSame( DispatchRecord::STATE_FAILED, $reclaimed->state() );
+		$this->assertSame( 'lease_expired', $reclaimed->last_reason() );
+		$this->assertNull( $reclaimed->claimed_at() );
+
+		// And it is immediately claimable again.
+		$this->assertCount( 1, $this->outbox->claim_due( 5 ) );
 	}
 
 	public function test_count_by_state_and_delete_for_conversation(): void {

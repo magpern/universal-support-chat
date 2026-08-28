@@ -36,19 +36,22 @@ Implements **ADR-0012**. Branch: `feature/sc-telegram-adapter-dispatch`.
   presence/assignment-aware notification is out of scope.
 - **A2** — the fixed Contract v1 peer slug for the adapter is `universal-telegram` (matches
   UT `ContractConstants::SELF_ID` and UT's own interop suite).
-- **A3** — pre-existing SC interop suites that reference now-removed UT SC-M03 classes
-  (`QuiescenceGate`, `DeferredUpdateRepository`, `universal_telegram_conversations`) are
-  already broken on `origin/main` by UT PR #62 / ADR-0044. Repairing/retiring them is **not**
-  part of this feature (separate follow-up); this plan's interop CI job runs only the new
-  ADR-0012 test.
+- **A3** — pre-existing SC interop suites that referenced now-removed UT SC-M03 classes
+  (`QuiescenceGate`, `DeferredUpdateRepository`, `universal_telegram_conversations`, the legacy
+  export/binding services) were already broken on `origin/main` by UT PR #62 / ADR-0044. They
+  test the retired SC-M03 cutover track and are **retired here** (deleted), so the full
+  `bin/docker/test-integration-interop.sh` suite is green again. Retiring Support Chat's own
+  now-orphaned `src/Migration/*` SC-M03 engine + WP-CLI commands is a separate follow-up.
 
 ## 4. Architectural decisions
 
 See ADR-0012 §Decision and §Alternatives. Summary: a Support-Chat-owned, content-free outbox
-table; a non-throwing post-commit enqueue seam on the two write paths; a permanent
-suppression marker on the inbound-ingest path for loop prevention; a WP-Cron-only delivery
-worker driving the existing signed Contract v1 client with the message-UUID idempotency key;
-an opt-in `telegram_dispatch_enabled` flag (default off).
+table; a **single-transaction** message-plus-outbox write on the two write paths
+(`DispatchEnqueuer::persist_and_enqueue`); a permanent suppression marker on the inbound-ingest
+path for loop prevention; a WP-Cron-only delivery worker driving the existing signed Contract
+v1 client with the message-UUID idempotency key, guarded by a `claimed_at`/`lease_expires_at`
+crash-recovery lease reclaimed on every sweep; an opt-in `telegram_dispatch_enabled` flag
+(default off).
 
 ## 5. Directory, namespace, schema, and API impact
 
@@ -73,15 +76,22 @@ are untouched; the feature is opt-in.
 ## 7. Test and CI impact
 
 - Unit: `SettingsTest` — `telegram_dispatch_enabled` default + coercion.
-- Integration (wp-only): `DispatchOutboxRepositoryTest`, `TelegramDispatchServiceTest`,
-  `DispatchWiringTest`, `DispatchSchemaTest`; `ActivationTest` / `MigratorTest` version
-  assertions 11 → 12.
-- Interop (real UT `main`, real signed Contract v1):
+- Integration (wp-only): `DispatchOutboxRepositoryTest` (lease claim + expired-lease reclaim),
+  `TelegramDispatchServiceTest` (crash-before / crash-after-remote-acceptance),
+  `DispatchWiringTest` (message + outbox commit together; outbox-write failure rolls back the
+  message; disabled path unchanged; idempotent re-POST not rolled back), `DispatchSchemaTest`;
+  `ActivationTest` / `MigratorTest` version assertions 11 → 12.
+- Interop (real Universal Telegram pinned commit, real signed Contract v1):
   `tests/integration/Interop/TelegramDispatchInteropTest.php` — visitor message → real
   encrypted UT transport row + real active binding; retry converges with no duplicate;
   Telegram-originated reply ingested but never mirrored back; message retained + retryable
   when UT is disabled.
-- CI: new `interop-telegram-dispatch` job checks out UT `main` and runs the new interop test.
+- The obsolete SC-M03 interop suites (`SchemaInventoryTest`, `QuiescenceProviderIntegrationTest`,
+  `LegacyExportClientIntegrationTest`, `LegacyBindingImportIntegrationTest`, and the
+  `ExportBatchSideEffectClient` support double) are **deleted** — they load UT classes ADR-0044
+  removed and cannot pass. The full `bin/docker/test-integration-interop.sh` suite is green.
+- CI: new `interop` job checks out Universal Telegram **pinned to
+  `1af1cf3d9011060cb9244adfd93cfa916acfbdc6`** and runs the whole interop suite.
 
 ## 8. Work packages (execution order)
 
@@ -99,16 +109,23 @@ are untouched; the feature is opt-in.
   clears rows, `count_by_state()` diagnostics.
 - **Duplicate Telegram delivery on retry** → message-UUID idempotency key on both sides + the
   outbox `state` machine + guarded row claim.
+- **Message committed without an outbox row** (crash between the two writes, or a failed
+  enqueue) → both are written in one transaction; failure rolls both back and the caller
+  returns its ordinary retryable error.
+- **Worker crash strands a row in `delivering`** → `claimed_at`/`lease_expires_at` lease;
+  every sweep reclaims expired claims to `failed`/due-now; re-delivery converges via the
+  idempotency key.
 - **Loop (Telegram reply mirrored back)** → permanent `suppressed` marker written on the
   inbound-ingest path, independent of the feature flag; the worker cannot claim `suppressed`
   rows.
-- **Write path made slower/fragile** → enqueue is post-commit, non-throwing, and a no-op when
-  disabled or when the schema is unavailable.
+- **Write path made slower/fragile** → the transaction is opened only when the feature is on;
+  it wraps just the two writes; with the feature off the path is byte-for-byte unchanged.
 
 ## 10. Out of scope
 
 - Any change to Contract v1, ADR-0007, or ADR-0011.
-- Repairing/retiring the pre-existing SC-M03 interop suites broken by UT ADR-0044 (A3).
+- Retiring Support Chat's own now-orphaned `src/Migration/*` SC-M03 engine and WP-CLI commands
+  (only the dead interop *tests* are removed here — see A3).
 - Universal Telegram's stale-settings cleanup (separate follow-up).
 - Presence/assignment-aware operator notification policy beyond "notify on topic creation".
 - Any DEV or production deployment, release, or tag.

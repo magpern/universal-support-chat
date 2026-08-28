@@ -45,39 +45,51 @@ conversation message that is a candidate for mirroring to Telegram:
 | `state` | `pending` → `delivering` → `delivered` \| `failed` \| `abandoned` \| `suppressed` |
 | `attempts`, `last_reason`, `next_attempt_at` | retry accounting |
 | `channel_case_ref` | resolved adapter case ref, once known |
+| `claimed_at`, `lease_expires_at` | worker crash-recovery lease (§3) |
 
 **No column is content-bearing.** The message body is read live from the encrypted
 `conversation_messages` table (decrypted in memory only) at delivery time, exactly like a
 `deliver_message` call already does. `verify_step_12` fails the migration if a
 `body`/`body_ciphertext`/`plaintext`/`content_hash`/`digest`/`text` column ever appears.
 
-Persisting the row **before** any transport attempt is what makes delivery survivable: a
-committed Support Chat message is never lost because Universal Telegram is unpaired, disabled,
-or unreachable — the row simply stays `pending`/`failed` and retryable.
+### 2. The outbox row is written in the same transaction as the message
 
-### 2. Post-commit enqueue seam
+`DispatchEnqueuer::persist_and_enqueue()` is the seam the visitor REST path and the Hub reply
+path call to persist a message. When dispatch is **enabled** it opens one explicit
+transaction, runs the caller's message-create closure, inserts the outbox row, and commits
+both together — or rolls both back. There is no window in which a committed message exists
+with no outbox row to drive its mirror and its retry. If the outbox write genuinely fails the
+message write is rolled back and the caller returns its ordinary retryable error (the visitor
+or operator simply retries), exactly as it already does when the message write itself fails.
+An idempotent re-POST whose outbox row already exists is **not** a failure and is not rolled
+back.
 
-`DispatchEnqueuer` is the single, deliberately non-throwing seam that the write paths call
-**after** the message row is committed and the conversation status transition is done:
+When dispatch is **disabled** (the default) no transaction is opened and the message write is
+byte-for-byte what it was before this feature.
 
-- `ConversationsController::handle_post_message()` → `enqueue_message()` for the visitor message.
-- `HubActions::handle_reply()` → `enqueue_message()` for the operator reply.
-- `ContractOperationDispatcher::ingest_operator_reply()` → `mark_telegram_origin()` — writes a
-  permanent `origin=telegram`, `state=suppressed` row so a reply that arrived *from* Telegram
-  can never be mirrored back out (loop prevention, requirement 5). This marker is written
-  regardless of the feature flag.
+`ContractOperationDispatcher::ingest_operator_reply()` calls `mark_telegram_origin()` — a
+permanent `origin=telegram`, `state=suppressed` row so a reply that arrived *from* Telegram
+can never be mirrored back out (loop prevention). This marker stays best-effort and idempotent:
+it is defence-in-depth, since no code path ever enqueues an ingested message.
 
-The enqueuer is injected as an **optional** constructor argument on all three call sites, so
-existing tests and any external construction keep working with the mirror simply inert.
+The enqueuer is injected as an **optional** constructor argument on all call sites, so existing
+tests and any external construction keep working with the mirror simply inert.
 
-`enqueue_message()` is a no-op when the feature flag is off, when a row for the message already
-exists, or for a direction that is never mirrored. It also schedules an immediate one-off
-WP-Cron kick so latency stays low.
-
-### 3. Delivery worker (WP-Cron only)
+### 3. Delivery worker (WP-Cron only), with a crash-recovery lease
 
 `TelegramDispatchService::dispatch_due()` runs only from `DispatchWorker` — a recurring 60s
-WP-Cron sweep plus the one-off kicks — never inside a visitor or Hub request. Per claimed row:
+WP-Cron sweep plus the one-off kicks — never inside a visitor or Hub request.
+
+Each sweep first **reclaims stale claims**: any row left in `delivering` past its
+`lease_expires_at` (default 300s — comfortably longer than one delivery) is moved back to
+`failed`/due-now with reason `lease_expired`. A worker that crashes after claiming a row —
+including after Universal Telegram accepted the idempotent delivery but before Support Chat
+recorded it — can therefore never strand the message: the row is reclaimed and re-delivered,
+and Universal Telegram's message-UUID idempotency returns `reused`, converging cleanly.
+`reclaim_expired_leases()` also runs when the feature is toggled off, so disabling dispatch
+never strands an in-flight row.
+
+Per claimed row:
 
 1. Load the message; if it is gone or its body was retention-nulled → `abandoned` (a retry
    cannot recover it).
@@ -91,9 +103,9 @@ WP-Cron sweep plus the one-off kicks — never inside a visitor or Hub request. 
    `DeliveryIdempotencyRepository` dedupes, so a retry can **never** duplicate a Telegram
    delivery. `invalid_input` → `abandoned`; any other failure → retryable `failed`.
 
-Row claiming is a guarded `UPDATE … WHERE state IN ('pending','failed')` so overlapping sweeps
-cannot double-process, and `suppressed`/`delivered`/`abandoned` rows are structurally
-unreachable from the worker.
+Row claiming is a guarded `UPDATE … WHERE state IN ('pending','failed')` that also stamps
+`claimed_at`/`lease_expires_at`, so overlapping sweeps cannot double-process, and
+`suppressed`/`delivered`/`abandoned` rows are structurally unreachable from the worker.
 
 ### 4. Opt-in flag
 
@@ -115,15 +127,28 @@ byte-for-byte unchanged.
 - **Action Scheduler for the worker.** Rejected: Support Chat has no Action Scheduler
   dependency; `RetentionCleanupHandler` / `NonceCleanupHandler` already establish the WP-Cron
   pattern used here.
+- **A best-effort post-commit enqueue hook** (the first draft). Rejected on review: a crash in
+  the gap between the message commit and the hook, or a failed enqueue, leaves a message with
+  no outbox row and no retry. Replaced with the single-transaction write in §2.
+- **A polling reconciler** that back-fills missing outbox rows by scanning recent messages.
+  Rejected as the primary mechanism: it is eventually-consistent, needs its own cursor/tuning,
+  and the single-transaction write removes the gap it would paper over. May still be added
+  later as a cheap belt-and-braces sweep.
+- **No `delivering` lease.** Rejected on review: a worker crash after claiming a row (worst
+  case: after Universal Telegram accepted the delivery) would strand it in `delivering`
+  forever. Added `claimed_at`/`lease_expires_at` + a reclaim pass (§3).
 
 ## Consequences
 
 - One additive table; `db_version` 11 → 12. No existing table changes. Uninstall drops it.
+- When dispatch is enabled, `handle_post_message` / `handle_reply` now run their message write
+  inside a short transaction. A transient DB failure there returns the same retryable error the
+  message write already returned on failure — the visitor/operator retries.
 - A committed Support Chat message destined for Telegram is retried indefinitely (capped
   backoff) until delivered or provably undeliverable; delivery state is inspectable via
   `DispatchOutboxRepository::count_by_state()` and a `telegram_dispatch.swept` audit line.
 - Exactly one Telegram delivery per Support Chat message, guaranteed by the message-UUID
-  idempotency key on both sides plus the outbox `state` machine.
+  idempotency key on both sides, the outbox `state` machine, and the crash-recovery lease.
 - Telegram-originated replies are structurally prevented from looping back out.
 - Retention purge also clears the conversation's outbox rows (no orphans).
 - No new REST route; no direct Universal Telegram SQL; no shared database; no copied UT code —

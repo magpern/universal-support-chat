@@ -27,6 +27,15 @@ use UniversalSupportChat\Persistence\SchemaHealth;
 final class DispatchOutboxRepository {
 
 	/**
+	 * How long a `delivering` claim is valid before the worker is presumed
+	 * to have crashed and the row is reclaimed to a retryable state. Longer
+	 * than any realistic single-row delivery; the message-UUID idempotency
+	 * key makes a re-delivery of an already-accepted message safe
+	 * (Universal Telegram returns `reused`).
+	 */
+	public const LEASE_SECONDS = 300;
+
+	/**
 	 * Schema availability gate.
 	 *
 	 * @var SchemaHealth
@@ -216,9 +225,44 @@ final class DispatchOutboxRepository {
 	}
 
 	/**
-	 * Atomically claims up to $limit due rows, moving each from
-	 * `pending`/`failed` to `delivering`. Suppressed, delivered, and
-	 * abandoned rows are structurally unreachable here.
+	 * Reclaims rows whose `delivering` lease has expired (the worker that
+	 * claimed them is presumed to have crashed) back to a retryable
+	 * `failed`/due-now state. Safe to run every sweep and safe to run
+	 * concurrently — the `WHERE` clause is self-guarding.
+	 *
+	 * @return int Number of rows reclaimed.
+	 */
+	public function reclaim_expired_leases(): int {
+		if ( ! $this->schema_health->is_available() ) {
+			return 0;
+		}
+
+		global $wpdb;
+
+		$now   = current_time( 'mysql', true );
+		$table = $wpdb->prefix . Migrator::TELEGRAM_DISPATCH_TABLE;
+
+		$reclaimed = $wpdb->query(
+			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
+				"UPDATE {$table} SET state = %s, last_reason = %s, next_attempt_at = %s, claimed_at = NULL, lease_expires_at = NULL, updated_at = %s WHERE state = %s AND lease_expires_at IS NOT NULL AND lease_expires_at <= %s",
+				DispatchRecord::STATE_FAILED,
+				'lease_expired',
+				$now,
+				$now,
+				DispatchRecord::STATE_DELIVERING,
+				$now
+			)
+		);
+
+		return is_int( $reclaimed ) ? $reclaimed : 0;
+	}
+
+	/**
+	 * Reclaims expired leases, then atomically claims up to $limit due
+	 * rows, moving each from `pending`/`failed` to `delivering` under a
+	 * time-boxed lease. Suppressed, delivered, and abandoned rows are
+	 * structurally unreachable here.
 	 *
 	 * @param int $limit Maximum rows to claim.
 	 *
@@ -229,9 +273,12 @@ final class DispatchOutboxRepository {
 			return array();
 		}
 
+		$this->reclaim_expired_leases();
+
 		global $wpdb;
 
 		$now   = current_time( 'mysql', true );
+		$lease = gmdate( 'Y-m-d H:i:s', time() + self::LEASE_SECONDS );
 		$table = $wpdb->prefix . Migrator::TELEGRAM_DISPATCH_TABLE;
 
 		$ids = $wpdb->get_col(
@@ -251,8 +298,10 @@ final class DispatchOutboxRepository {
 			$won = $wpdb->query(
 				$wpdb->prepare(
 					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
-					"UPDATE {$table} SET state = %s, attempts = attempts + 1, updated_at = %s WHERE id = %d AND state IN ('pending', 'failed')",
+					"UPDATE {$table} SET state = %s, attempts = attempts + 1, claimed_at = %s, lease_expires_at = %s, updated_at = %s WHERE id = %d AND state IN ('pending', 'failed')",
 					DispatchRecord::STATE_DELIVERING,
+					$now,
+					$lease,
 					$now,
 					$id
 				)
@@ -288,8 +337,10 @@ final class DispatchOutboxRepository {
 		$this->update(
 			$id,
 			array(
-				'state'       => DispatchRecord::STATE_DELIVERED,
-				'last_reason' => null,
+				'state'            => DispatchRecord::STATE_DELIVERED,
+				'last_reason'      => null,
+				'claimed_at'       => null,
+				'lease_expires_at' => null,
 			)
 		);
 	}
@@ -305,9 +356,11 @@ final class DispatchOutboxRepository {
 		$this->update(
 			$id,
 			array(
-				'state'           => DispatchRecord::STATE_FAILED,
-				'last_reason'     => $reason,
-				'next_attempt_at' => gmdate( 'Y-m-d H:i:s', time() + max( 1, $backoff_seconds ) ),
+				'state'            => DispatchRecord::STATE_FAILED,
+				'last_reason'      => $reason,
+				'next_attempt_at'  => gmdate( 'Y-m-d H:i:s', time() + max( 1, $backoff_seconds ) ),
+				'claimed_at'       => null,
+				'lease_expires_at' => null,
 			)
 		);
 	}
@@ -322,8 +375,10 @@ final class DispatchOutboxRepository {
 		$this->update(
 			$id,
 			array(
-				'state'       => DispatchRecord::STATE_ABANDONED,
-				'last_reason' => $reason,
+				'state'            => DispatchRecord::STATE_ABANDONED,
+				'last_reason'      => $reason,
+				'claimed_at'       => null,
+				'lease_expires_at' => null,
 			)
 		);
 	}

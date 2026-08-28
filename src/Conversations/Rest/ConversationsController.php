@@ -236,13 +236,20 @@ final class ConversationsController {
 		$idempotency = $request->get_param( 'idempotency_key' );
 		$idempotency = is_string( $idempotency ) && $this->is_uuid( $idempotency ) ? $idempotency : null;
 
-		$message = $this->messages->create(
+		$create = fn (): ?ConversationMessage => $this->messages->create(
 			$conversation->id(),
 			ConversationMessage::DIRECTION_VISITOR,
 			$text,
 			'stored',
 			$idempotency
 		);
+
+		// When Telegram dispatch is enabled the message row and its outbox
+		// row are written in one transaction (ADR-0012); otherwise this is
+		// a plain message create.
+		$message = null !== $this->dispatch
+			? $this->dispatch->persist_and_enqueue( $conversation->uuid(), $create )
+			: $create();
 
 		if ( null === $message ) {
 			return $this->error( 'request_failed', 503 );
@@ -254,10 +261,6 @@ final class ConversationsController {
 			$this->conversations->transition( $conversation, ConversationStatus::OPEN );
 		} else {
 			$this->conversations->touch( $conversation );
-		}
-
-		if ( null !== $this->dispatch ) {
-			$this->dispatch->enqueue_message( $message, $conversation->uuid() );
 		}
 
 		return $this->ok(
