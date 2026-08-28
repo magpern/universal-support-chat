@@ -28,6 +28,7 @@ class Migrator {
 	public const LEGACY_MIGRATION_MESSAGE_MAP_TABLE = 'universal_support_chat_legacy_migration_message_map';
 	public const LEGACY_MIGRATION_BATCH_LOG_TABLE   = 'universal_support_chat_legacy_migration_batch_log';
 	public const LEGACY_HANDOFF_MAP_TABLE           = 'universal_support_chat_legacy_handoff_map';
+	public const TELEGRAM_DISPATCH_TABLE            = 'universal_support_chat_telegram_dispatch';
 
 	private const DB_VERSION_OPTION = 'universal_support_chat_db_version';
 
@@ -51,7 +52,7 @@ class Migrator {
 	 * Highest step number this migrator knows how to run.
 	 */
 	protected function target_version(): int {
-		return 11;
+		return 12;
 	}
 
 	/**
@@ -121,6 +122,7 @@ class Migrator {
 			9  => array( array( $this, 'step_9_create_legacy_migration_tables' ), array( $this, 'verify_step_9' ) ),
 			10 => array( array( $this, 'step_10_add_legacy_migration_map_binding_columns' ), array( $this, 'verify_step_10' ) ),
 			11 => array( array( $this, 'step_11_create_legacy_handoff_map_table' ), array( $this, 'verify_step_11' ) ),
+			12 => array( array( $this, 'step_12_create_telegram_dispatch_table' ), array( $this, 'verify_step_12' ) ),
 		);
 
 		if ( ! isset( $steps[ $number ] ) ) {
@@ -858,6 +860,79 @@ class Migrator {
 		);
 
 		$forbidden_content_columns = array( 'body', 'body_ciphertext', 'plaintext', 'content_hash', 'digest' );
+
+		return $columns_ok && ! $this->table_has_any_column( $table, $forbidden_content_columns );
+	}
+
+	/**
+	 * Creates the Support Chat -> Telegram automatic-dispatch outbox
+	 * (ADR-0012). One durable, Support-Chat-owned row per committed
+	 * conversation message that is a candidate for mirroring into the
+	 * linked Telegram forum topic, so a committed message is never lost
+	 * when the Universal Telegram adapter is unavailable. No column here is
+	 * content-bearing: the body is read live from the encrypted messages
+	 * table at delivery time.
+	 */
+	private function step_12_create_telegram_dispatch_table(): void {
+		global $wpdb;
+
+		$table           = $wpdb->prefix . self::TELEGRAM_DISPATCH_TABLE;
+		$charset_collate = $wpdb->get_charset_collate();
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$table} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				message_uuid CHAR(36) NOT NULL,
+				conversation_id BIGINT UNSIGNED NOT NULL,
+				conversation_uuid CHAR(36) NOT NULL,
+				direction VARCHAR(16) NOT NULL,
+				origin VARCHAR(16) NOT NULL DEFAULT 'support_chat',
+				state VARCHAR(24) NOT NULL DEFAULT 'pending',
+				attempts INT UNSIGNED NOT NULL DEFAULT 0,
+				channel_case_ref CHAR(36) NULL,
+				last_reason VARCHAR(191) NULL,
+				next_attempt_at DATETIME NOT NULL,
+				created_at DATETIME NOT NULL,
+				updated_at DATETIME NOT NULL,
+				PRIMARY KEY (id),
+				UNIQUE KEY message_uuid (message_uuid),
+				KEY state_due (state, next_attempt_at),
+				KEY conversation_id (conversation_id)
+			) {$charset_collate}"
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	/**
+	 * Verifies the dispatch outbox exists with the expected columns and
+	 * carries no forbidden content column.
+	 */
+	private function verify_step_12(): bool {
+		global $wpdb;
+
+		$table = $wpdb->prefix . self::TELEGRAM_DISPATCH_TABLE;
+
+		$columns_ok = $this->table_has_columns(
+			$table,
+			array(
+				'id',
+				'message_uuid',
+				'conversation_id',
+				'conversation_uuid',
+				'direction',
+				'origin',
+				'state',
+				'attempts',
+				'channel_case_ref',
+				'last_reason',
+				'next_attempt_at',
+				'created_at',
+				'updated_at',
+			)
+		);
+
+		$forbidden_content_columns = array( 'body', 'body_ciphertext', 'plaintext', 'content_hash', 'digest', 'text' );
 
 		return $columns_ok && ! $this->table_has_any_column( $table, $forbidden_content_columns );
 	}

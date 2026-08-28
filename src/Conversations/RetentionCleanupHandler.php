@@ -12,6 +12,7 @@ namespace UniversalSupportChat\Conversations;
 use UniversalSupportChat\Audit\AuditLogger;
 use UniversalSupportChat\Core\Configuration\Settings;
 use UniversalSupportChat\Privacy\Classification;
+use UniversalSupportChat\TelegramDispatch\DispatchOutboxRepository;
 
 /**
  * Support Chat-owned retention: resolve inactive, null bodies, purge archived.
@@ -57,26 +58,37 @@ final class RetentionCleanupHandler {
 	private AuditLogger $audit;
 
 	/**
+	 * Optional Telegram dispatch outbox (ADR-0012) — purged alongside a
+	 * conversation's messages so no orphan delivery rows survive.
+	 *
+	 * @var DispatchOutboxRepository|null
+	 */
+	private ?DispatchOutboxRepository $dispatch_outbox;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param ConversationRepository $conversations Conversation repository.
-	 * @param MessageRepository      $messages      Message repository.
-	 * @param NoteRepository         $notes         Note repository.
-	 * @param Settings               $settings      Plugin settings.
-	 * @param AuditLogger            $audit         Audit logger.
+	 * @param ConversationRepository        $conversations    Conversation repository.
+	 * @param MessageRepository             $messages         Message repository.
+	 * @param NoteRepository                $notes            Note repository.
+	 * @param Settings                      $settings         Plugin settings.
+	 * @param AuditLogger                   $audit            Audit logger.
+	 * @param DispatchOutboxRepository|null $dispatch_outbox  Optional Telegram dispatch outbox.
 	 */
 	public function __construct(
 		ConversationRepository $conversations,
 		MessageRepository $messages,
 		NoteRepository $notes,
 		Settings $settings,
-		AuditLogger $audit
+		AuditLogger $audit,
+		?DispatchOutboxRepository $dispatch_outbox = null
 	) {
-		$this->conversations = $conversations;
-		$this->messages      = $messages;
-		$this->notes         = $notes;
-		$this->settings      = $settings;
-		$this->audit         = $audit;
+		$this->conversations   = $conversations;
+		$this->messages        = $messages;
+		$this->notes           = $notes;
+		$this->settings        = $settings;
+		$this->audit           = $audit;
+		$this->dispatch_outbox = $dispatch_outbox;
 	}
 
 	/**
@@ -149,6 +161,9 @@ final class RetentionCleanupHandler {
 			if ( ! $dry_run ) {
 				$this->messages->delete_for_conversation( $conversation->id() );
 				$this->notes->delete_for_conversation( $conversation->id() );
+				if ( null !== $this->dispatch_outbox ) {
+					$this->dispatch_outbox->delete_for_conversation( $conversation->id() );
+				}
 				$this->conversations->delete_by_id( $conversation->id() );
 			}
 		}

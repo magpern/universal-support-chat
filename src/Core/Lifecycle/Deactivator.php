@@ -10,6 +10,7 @@ declare( strict_types=1 );
 namespace UniversalSupportChat\Core\Lifecycle;
 
 use UniversalSupportChat\Conversations\RetentionCleanupHandler;
+use UniversalSupportChat\TelegramDispatch\DispatchWorker;
 
 /**
  * Deactivation clears scheduled retention; uninstall is the only place
@@ -25,5 +26,7 @@ final class Deactivator {
 		if ( false !== $timestamp ) {
 			wp_unschedule_event( $timestamp, RetentionCleanupHandler::CRON_HOOK );
 		}
+
+		DispatchWorker::unschedule();
 	}
 }

@@ -15,10 +15,18 @@ wp_version="${wp_version:-6.9}"
 php_version="$(sc_parse_flag --php-version "$@")"
 php_version="${php_version:-8.1}"
 
+# Optional: restrict the interop run to a subset (e.g. a single feature's
+# interop test). Passed through verbatim to PHPUnit's --filter.
+filter="$(sc_parse_flag --filter "$@")"
+filter_arg=""
+if [ -n "$filter" ]; then
+    filter_arg="--filter '${filter}'"
+fi
+
 sc_compose_run_interop "$php_version" bash -c "
     set -euo pipefail
     tests/bin/install-wp.sh '${wp_version}'
     source /tmp/usc-wp-env.sh
     tests/bin/install-universal-telegram.sh
-    vendor/bin/phpunit -c phpunit-interop.xml.dist
+    vendor/bin/phpunit -c phpunit-interop.xml.dist ${filter_arg}
 "

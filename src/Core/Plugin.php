@@ -59,6 +59,10 @@ use UniversalSupportChat\Persistence\MigrationLock;
 use UniversalSupportChat\Persistence\Migrator;
 use UniversalSupportChat\Persistence\SchemaHealth;
 use UniversalSupportChat\Privacy\Redactor;
+use UniversalSupportChat\TelegramDispatch\DispatchEnqueuer;
+use UniversalSupportChat\TelegramDispatch\DispatchOutboxRepository;
+use UniversalSupportChat\TelegramDispatch\DispatchWorker;
+use UniversalSupportChat\TelegramDispatch\TelegramDispatchService;
 
 /**
  * Hand-wired composition root. No dependency-injection container.
@@ -101,6 +105,20 @@ final class Plugin {
 	 * @var LegacyMigrationMapRepository|null
 	 */
 	private ?LegacyMigrationMapRepository $legacy_migration_map = null;
+
+	/**
+	 * ADR-0012 automatic Telegram dispatch worker, for tests/diagnostics.
+	 *
+	 * @var TelegramDispatchService|null
+	 */
+	private ?TelegramDispatchService $telegram_dispatch_service = null;
+
+	/**
+	 * ADR-0012 dispatch outbox repository, for tests/diagnostics.
+	 *
+	 * @var DispatchOutboxRepository|null
+	 */
+	private ?DispatchOutboxRepository $telegram_dispatch_outbox = null;
 
 	/**
 	 * SC-M03 work packages 3-4: Phase A preparatory backfill, for tests.
@@ -179,7 +197,17 @@ final class Plugin {
 		$pairing        = new PairingService( $peers, $audit );
 		$verifier       = new SignatureVerifier( $peers, $nonces );
 		$handoff_map    = new HandoffMapRepository( $schema_health );
-		$dispatcher     = new ContractOperationDispatcher( $conversations, $messages, $channel_status, $audit, $handoff_map );
+
+		// ADR-0012: automatic Support Chat -> Telegram message dispatch.
+		// The outbox is Support-Chat-owned durable delivery state; the
+		// enqueuer is the post-commit seam the visitor REST path, the Hub
+		// reply path, and (for loop prevention) the inbound Contract
+		// ingest path call. Delivery itself runs only from WP-Cron
+		// (DispatchWorker), never inside a visitor or Hub request.
+		$dispatch_outbox   = new DispatchOutboxRepository( $schema_health );
+		$dispatch_enqueuer = new DispatchEnqueuer( $settings, $dispatch_outbox );
+
+		$dispatcher = new ContractOperationDispatcher( $conversations, $messages, $channel_status, $audit, $handoff_map, $dispatch_enqueuer );
 
 		// SC-M03 work package 1: outbound Contract v1 client (ADR-0005 §4,
 		// ADR-0007). Wired here for future escalation/delivery call sites;
@@ -190,9 +218,21 @@ final class Plugin {
 
 		$settings->register();
 
+		$dispatch_service = new TelegramDispatchService(
+			$settings,
+			$dispatch_outbox,
+			$messages,
+			$this->adapter_contract_client,
+			$audit
+		);
+
 		( new DiagnosticsPage( $schema_health, $audit_repo, $vault ) )->register();
-		( new ConversationsController( $schema_health, $conversations, $messages ) )->register();
-		( new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit ) )->register();
+		( new ConversationsController( $schema_health, $conversations, $messages, $dispatch_enqueuer ) )->register();
+		( new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit, $dispatch_outbox ) )->register();
+		( new DispatchWorker( $dispatch_service ) )->register();
+
+		$this->telegram_dispatch_service = $dispatch_service;
+		$this->telegram_dispatch_outbox  = $dispatch_outbox;
 		( new ContractDiscovery( $peers ) )->register();
 		( new ContractOperationsController( $verifier, $dispatcher ) )->register();
 		( new NonceCleanupHandler( $nonces ) )->register();
@@ -202,7 +242,7 @@ final class Plugin {
 		$inbox  = new ConversationInboxPage( $schema_health, $conversations );
 		$detail = new ConversationDetailPage( $schema_health, $conversations, $messages, $notes );
 		( new HubPage( $inbox, $detail ) )->register();
-		( new HubActions( $schema_health, $conversations, $messages, $notes, $audit ) )->register();
+		( new HubActions( $schema_health, $conversations, $messages, $notes, $audit, $dispatch_enqueuer ) )->register();
 		( new WidgetAssets( $settings, $schema_health ) )->register();
 
 		// SC-M03 work packages 3-4: legacy migration engine (ADR-0008,
@@ -295,6 +335,20 @@ final class Plugin {
 	 */
 	public function legacy_migration_map(): ?LegacyMigrationMapRepository {
 		return $this->legacy_migration_map;
+	}
+
+	/**
+	 * ADR-0012 automatic Telegram dispatch worker (tests/diagnostics).
+	 */
+	public function telegram_dispatch_service(): ?TelegramDispatchService {
+		return $this->telegram_dispatch_service;
+	}
+
+	/**
+	 * ADR-0012 dispatch outbox repository (tests/diagnostics).
+	 */
+	public function telegram_dispatch_outbox(): ?DispatchOutboxRepository {
+		return $this->telegram_dispatch_outbox;
 	}
 
 	/**

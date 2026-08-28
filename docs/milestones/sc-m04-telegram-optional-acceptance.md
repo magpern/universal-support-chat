@@ -35,3 +35,13 @@ Prove Support Chat operates correctly with Universal Telegram **absent** or **un
 ## Frozen plan
 
 [sc-m04-telegram-optional-acceptance-plan-v1.md](../plans/sc-m04-telegram-optional-acceptance-plan-v1.md)
+
+## Post-freeze additions
+
+- **ADR-0012 — automatic Support Chat → Telegram message dispatch.** Realises the
+  SC-owned-delivery half of the Universal Telegram ADR-0044 end state: visitor messages and Hub
+  operator replies are automatically mirrored to the linked Telegram forum topic through the
+  existing signed Contract v1 path, backed by a Support-Chat-owned durable outbox; replies that
+  arrive from Telegram are ingested but never mirrored back. Opt-in
+  (`telegram_dispatch_enabled`, default off). Plan:
+  [sc-telegram-adapter-dispatch-plan-v1.md](../plans/sc-telegram-adapter-dispatch-plan-v1.md).

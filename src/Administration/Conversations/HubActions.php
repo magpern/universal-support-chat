@@ -19,6 +19,7 @@ use UniversalSupportChat\Conversations\NoteRepository;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
 use UniversalSupportChat\Persistence\SchemaHealth;
 use UniversalSupportChat\Privacy\Classification;
+use UniversalSupportChat\TelegramDispatch\DispatchEnqueuer;
 
 /**
  * Capability + CSRF gated Hub mutations. Never audits plaintext bodies.
@@ -63,6 +64,13 @@ final class HubActions {
 	private AuditLogger $audit;
 
 	/**
+	 * Optional Telegram dispatch enqueuer (ADR-0012).
+	 *
+	 * @var DispatchEnqueuer|null
+	 */
+	private ?DispatchEnqueuer $dispatch;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param SchemaHealth           $schema_health Schema health.
@@ -70,19 +78,22 @@ final class HubActions {
 	 * @param MessageRepository      $messages      Messages.
 	 * @param NoteRepository         $notes         Notes.
 	 * @param AuditLogger            $audit         Audit logger.
+	 * @param DispatchEnqueuer|null  $dispatch      Optional Telegram dispatch enqueuer.
 	 */
 	public function __construct(
 		SchemaHealth $schema_health,
 		ConversationRepository $conversations,
 		MessageRepository $messages,
 		NoteRepository $notes,
-		AuditLogger $audit
+		AuditLogger $audit,
+		?DispatchEnqueuer $dispatch = null
 	) {
 		$this->schema_health = $schema_health;
 		$this->conversations = $conversations;
 		$this->messages      = $messages;
 		$this->notes         = $notes;
 		$this->audit         = $audit;
+		$this->dispatch      = $dispatch;
 	}
 
 	/**
@@ -160,6 +171,10 @@ final class HubActions {
 			),
 			Classification::INTERNAL
 		);
+
+		if ( null !== $this->dispatch ) {
+			$this->dispatch->enqueue_message( $message, $conversation->uuid() );
+		}
 
 		$this->redirect( $conversation_id, 'reply_sent' );
 	}

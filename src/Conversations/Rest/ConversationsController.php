@@ -15,6 +15,7 @@ use UniversalSupportChat\Conversations\ConversationRepository;
 use UniversalSupportChat\Conversations\ConversationStatus;
 use UniversalSupportChat\Conversations\MessageRepository;
 use UniversalSupportChat\Persistence\SchemaHealth;
+use UniversalSupportChat\TelegramDispatch\DispatchEnqueuer;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -50,20 +51,30 @@ final class ConversationsController {
 	private MessageRepository $messages;
 
 	/**
+	 * Optional Telegram dispatch enqueuer (ADR-0012).
+	 *
+	 * @var DispatchEnqueuer|null
+	 */
+	private ?DispatchEnqueuer $dispatch;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param SchemaHealth           $schema_health Schema availability gate.
 	 * @param ConversationRepository $conversations Conversation repository.
 	 * @param MessageRepository      $messages      Message repository.
+	 * @param DispatchEnqueuer|null  $dispatch      Optional Telegram dispatch enqueuer.
 	 */
 	public function __construct(
 		SchemaHealth $schema_health,
 		ConversationRepository $conversations,
-		MessageRepository $messages
+		MessageRepository $messages,
+		?DispatchEnqueuer $dispatch = null
 	) {
 		$this->schema_health = $schema_health;
 		$this->conversations = $conversations;
 		$this->messages      = $messages;
+		$this->dispatch      = $dispatch;
 	}
 
 	/**
@@ -243,6 +254,10 @@ final class ConversationsController {
 			$this->conversations->transition( $conversation, ConversationStatus::OPEN );
 		} else {
 			$this->conversations->touch( $conversation );
+		}
+
+		if ( null !== $this->dispatch ) {
+			$this->dispatch->enqueue_message( $message, $conversation->uuid() );
 		}
 
 		return $this->ok(

@@ -40,7 +40,8 @@ final class Settings {
 	 *   conversation_inactive_days: int,
 	 *   conversation_archived_body_days: int,
 	 *   conversation_purge_days: int,
-	 *   widget_enabled: bool
+	 *   widget_enabled: bool,
+	 *   telegram_dispatch_enabled: bool
 	 * }
 	 */
 	public function defaults(): array {
@@ -50,6 +51,7 @@ final class Settings {
 			'conversation_archived_body_days' => 30,
 			'conversation_purge_days'         => 90,
 			'widget_enabled'                  => true,
+			'telegram_dispatch_enabled'       => false,
 		);
 	}
 
@@ -61,7 +63,8 @@ final class Settings {
 	 *   conversation_inactive_days: int,
 	 *   conversation_archived_body_days: int,
 	 *   conversation_purge_days: int,
-	 *   widget_enabled: bool
+	 *   widget_enabled: bool,
+	 *   telegram_dispatch_enabled: bool
 	 * }
 	 */
 	public function get(): array {
@@ -84,7 +87,8 @@ final class Settings {
 	 *   conversation_inactive_days: int,
 	 *   conversation_archived_body_days: int,
 	 *   conversation_purge_days: int,
-	 *   widget_enabled: bool
+	 *   widget_enabled: bool,
+	 *   telegram_dispatch_enabled: bool
 	 * }
 	 */
 	public function sanitize( $input ): array {
@@ -102,6 +106,9 @@ final class Settings {
 			'widget_enabled'                  => array_key_exists( 'widget_enabled', $input )
 				? ! empty( $input['widget_enabled'] )
 				: $defaults['widget_enabled'],
+			'telegram_dispatch_enabled'       => array_key_exists( 'telegram_dispatch_enabled', $input )
+				? ! empty( $input['telegram_dispatch_enabled'] )
+				: $defaults['telegram_dispatch_enabled'],
 		);
 	}
 
