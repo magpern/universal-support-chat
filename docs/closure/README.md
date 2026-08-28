@@ -13,5 +13,6 @@ Milestone and documentation-freeze closure records live in this directory.
 - [SC-M03 Work Package 2: Real Quiescence Provider and Phase B Continuous Re-check](sc-m03-wp2-phase-b-recheck-implementation-closure.md)
 - [SC-M03 Work Package 5: Legacy Binding Preparation](sc-m03-work-package-5-legacy-binding-preparation-closure.md)
 - [SC-M03 Final Cutover](sc-m03-final-cutover-closure.md)
-- [SC-M03 Final-Cutover Disposable DEV Rehearsal — Tier 1](sc-m03-final-cutover-dev-rehearsal-tier1-closure.md) — halted by finding F1; primary closure in the Universal Telegram repository
+- [SC-M03 Final-Cutover Disposable DEV Rehearsal — Tier 1](sc-m03-final-cutover-dev-rehearsal-tier1-closure.md) — halted first attempt (finding F1); primary closure in the Universal Telegram repository
+- [SC-M03 Final-Cutover Disposable DEV Rehearsal — Tier 1 re-attempt](sc-m03-final-cutover-dev-rehearsal-tier1-reattempt-closure.md) — the single authorised re-attempt under runbook v2, executed and PASSED 2026-08-28 (both WP/PHP variants); primary closure in the Universal Telegram repository
 - [SC-M03 Final-Cutover F1 `channel_case_ref` Identity-Correction Implementation](sc-m03-final-cutover-f1-identity-correction-implementation-closure.md) — comment corrections only (SC #26); primary closure in the Universal Telegram repository

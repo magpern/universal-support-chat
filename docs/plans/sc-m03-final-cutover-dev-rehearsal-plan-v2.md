@@ -3,9 +3,10 @@
 **Status: planning-only. No rehearsal has run under this runbook.** This document authorizes
 nothing and changes no code, schema, plugin version, `universal_support_chat_db_version`,
 configuration, test, tag, release, deployment, or infrastructure. The **Approval A addendum is
-RECORDED / Product Owner accepted 2026-08-28** and authorizes **exactly one (1)** disposable
-Tier 1 re-attempt at the two immutable execution baseline SHAs; Approval B (Tier 2) is still
-outstanding and blocked on B1 + B2.
+RECORDED / Product Owner accepted 2026-08-28**; the single authorised **Tier 1 re-attempt was
+executed 2026-08-28 and PASSED** on both WP/PHP variants (decision record Addendum D; closure
+`docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-reattempt-closure.md`) and that one-time
+authorisation is consumed. Approval B (Tier 2) is still outstanding and blocked on B1 + B2.
 
 **Primary runbook:** `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v2.md`
 (Universal Telegram owns the cutover and quiescence CLI and the operative runbook).
@@ -94,7 +95,7 @@ recorded):
 
 | Tier | What it is | Status under v2 |
 |---|---|---|
-| **Tier 1** | A required disposable automated operational-sequence / integration validation in the container/PHPUnit interop harness (`docker/docker-compose.yml` + `docker/docker-compose.interop.yml`, `down -v` before and after), zero Telegram traffic. Proves data effects, state-machine sequencing, CLI-equivalent service ordering of Runs 1, 2, 3. | **Required prerequisite. Unexecuted under v2.** The Approval A addendum is **RECORDED (2026-08-28)** and authorizes **exactly one (1)** Tier 1 re-attempt at the two immutable execution baseline SHAs. |
+| **Tier 1** | A required disposable automated operational-sequence / integration validation in the container/PHPUnit interop harness (`docker/docker-compose.yml` + `docker/docker-compose.interop.yml`, `down -v` before and after), zero Telegram traffic. Proves data effects, state-machine sequencing, CLI-equivalent service ordering of Runs 1, 2, 3. | **COMPLETE — the single authorised re-attempt ran 2026-08-28 and PASSED** on both WP/PHP variants at the immutable execution baseline SHAs (closure `docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-reattempt-closure.md`); the Approval A addendum's one-time authorisation is consumed. |
 | **Tier 2** | The first actual disposable DEV rehearsal: an isolated full-WordPress instance plus a dedicated non-production Telegram bot + test supergroup + test topics. | **Required. Blocked on B1 and B2.** |
 
 **Tier 1 does NOT satisfy the accepted requirement for a disposable DEV rehearsal.** B1 and B2
@@ -214,7 +215,7 @@ inherits them unchanged. **Nothing in this repository authorizes execution of ei
 | **B2** | No dedicated non-production Telegram bot / test supergroup / test topics. | Execution of the DEV rehearsal (Tier 2). | Open. |
 | **B3** | `cutover begin` and `cutover activate` have no dry-run. | Confidence that they can be "previewed." | Documented limitation. |
 | **B4** | Assumption A3 unresolved. | Trusting `begin` alone as the migration-evidence gate; §5.3 compensates. | Compensated. |
-| **B5 (governance)** | Product Owner authorization to execute the rehearsal under v2. | Tier 2; Tier 1 is now cleared for exactly one re-attempt. | **Tier 1: CLEARED** — Approval A addendum recorded 2026-08-28 (decision record Addendum C), one (1) re-attempt at the immutable baselines. **Tier 2: still open** — Approval B unchanged, blocked on B1 + B2. |
+| **B5 (governance)** | Product Owner authorization to execute the rehearsal under v2. | Tier 2. | **Tier 1: DONE** — Approval A addendum recorded 2026-08-28 (decision record Addendum C); the single authorised re-attempt was executed 2026-08-28 and PASSED (Addendum D; closure `docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-reattempt-closure.md`); one-time authorisation consumed. **Tier 2: still open** — Approval B unchanged, blocked on B1 + B2. |
 | ~~**F1**~~ | ~~The cutover deferred-update handoff cannot resolve a real prepared binding.~~ | ~~Tier 1 and Tier 2.~~ | **CLEARED 2026-08-27** — corrected and merged in both repositories; verified green by the real dual-plugin interop suite on both WP/PHP variants. A new pre-`begin` gate (A9) asserts the real-cohort handoff resolves in the disposable env before Tier 1 proceeds. |
 
 ## 7. Success criteria (Support Chat side; full list in the primary runbook §9)
