@@ -226,11 +226,16 @@ the primary runbook (§5, §9.1, §9.2) and apply unchanged here.
 This document authorizes nothing. It does not authorize execution of Tier 1 or Tier 2; any
 production or DEV quiescence window, migration, binding preparation, cohort activation,
 deferred-update replay, Telegram webhook, or operational command against `dev.biopentra.eu` or
-production; creation of infrastructure, containers, Telegram bots, groups, topics, DNS,
-certificates, or credentials; or any schema, plugin-version, `universal_support_chat_db_version`,
-configuration, test, CI-workflow, tag, release, or deployment change. Separate Product Owner
-approval — the Approval A addendum, then Approval B — is required before the DEV rehearsal, even
-the Tier 1 prerequisite, may be executed under this runbook.
+production; creation of any infrastructure — a DEV VPS instance, WordPress site, Redis service,
+SWAG configuration, DNS record, TLS certificate, Telegram bot / group / topic, credential, or
+host-level persistent service — or any schema, plugin-version, `universal_support_chat_db_version`,
+configuration, test, CI-workflow, tag, release, or deployment change. (Once the Approval A
+addendum is signed, a Tier 1 re-attempt may bring up only the ephemeral Docker containers,
+networks, and named volumes the disposable `docker/docker-compose.yml` + `docker-compose.interop.yml`
+harness creates intrinsically for fresh synthetic test databases and harness services, torn down
+by `docker compose … down -v` after every run — nothing else.) Separate Product Owner approval —
+the Approval A addendum, then Approval B — is required before the DEV rehearsal, even the Tier 1
+prerequisite, may be executed under this runbook.
 
 ## 9. Definition of done (documentation stage only)
 
