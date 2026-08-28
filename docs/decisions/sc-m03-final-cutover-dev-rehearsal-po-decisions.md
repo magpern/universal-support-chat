@@ -3,9 +3,9 @@
 ## Status
 
 **F1 correction MERGED (Addendum B). Approval A addendum RECORDED / Product Owner accepted
-2026-08-28 (Addendum C) — authorizes exactly one (1) Tier 1 re-attempt at the two immutable
-execution baseline SHAs and nothing else. Tier 2 (Approval B) still awaiting Product Owner,
-blocked on B1 and B2.**
+2026-08-28 (Addendum C). The single authorised Tier 1 re-attempt was EXECUTED 2026-08-28 and
+PASSED (Addendum D) — Addendum C's one-time authorisation is now consumed. Tier 2 (Approval B)
+still awaiting Product Owner, blocked on B1 and B2.**
 
 Decision items 1, 3, 4, and 5 (Tier 1 scope, incident-evidence rules, Approval-A gate) and item
 7 (F1 identity-correction implementation acceptance — implemented and merged) are recorded.
@@ -305,14 +305,47 @@ Owner approval recorded here.** No rehearsal has run.
 **Next authorised step: execute the single disposable Tier 1 re-attempt only** (Universal
 Telegram record §"Next authorised step").
 
+## Addendum D — 2026-08-28 — Tier 1 re-attempt EXECUTED and PASSED
+
+Explicitly labelled addendum. It records the outcome of the single re-attempt authorised by
+Addendum C; no decision item and no earlier text above is edited.
+
+**On 2026-08-28 the single authorised Tier 1 re-attempt was executed and PASSED.** It ran at the
+immutable execution baseline SHAs universal-telegram `6eed0228286e84b4e56e0119f242b483f138a58e`
+and universal-support-chat `4f833c3344c3cff2adcc0227f93832c0c3a4427a` (fresh throwaway checkouts,
+verified on origin before checkout, detached HEAD, clean tree), in the disposable
+`docker/docker-compose.yml` + `docker/docker-compose.interop.yml` interop harness only, with
+synthetic fixtures and zero Telegram network traffic, on both supported WP/PHP variants
+(WP 6.9 / PHP 8.1 and WP 7.1 / PHP 8.3), `docker compose … down -v` before and after every run.
+
+- Dual-plugin interop suite: **OK (47 tests, 722 assertions)** on both variants.
+- Unit and wp-only integration suites green on both variants.
+- The F1-correction gate held with a real `LegacyBindingImportServiceV1`-prepared binding
+  (`binding_uuid ≠ support_conversation_uuid`); the `legacy_handoff_map` row is keyed by the
+  Support Chat conversation UUID.
+- The exhaustive fail-closed replay classifier is confirmed; the `unresolved_case_reference`
+  and `handoff_rejected` incident paths block `replaying → idle` and `confirm-complete` as
+  designed; no incident row was mutated, acknowledged, or repaired.
+- Teardown proven: no `t1re` container, volume, or network survives.
+
+**No Support Chat runtime code, schema, `universal_support_chat_db_version` (11), test,
+configuration, CI-workflow, or immutable-baseline SHA was changed.** Closure records:
+[Tier 1 re-attempt closure (Support Chat)](../closure/sc-m03-final-cutover-dev-rehearsal-tier1-reattempt-closure.md);
+primary closure `https://github.com/magpern/universal-telegram/blob/main/docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-reattempt-closure.md`.
+
+**Tier 1 is complete. Addendum C's one-time authorisation is consumed.** No further Tier 1 run is
+authorised; a second Tier 1 attempt, or any change to the immutable baseline SHAs, requires a new
+Product Owner approval recorded here. Tier 2 (Approval B) remains a separate, later Product Owner
+action, blocked on B1 and B2.
+
 ## Non-authorization
 
 Apart from the F1 implementation acceptance recorded under decision item 7 (implementation of the
 frozen F1 remediation work packages — merged) and the Approval A addendum recorded under Addendum
-C (**exactly one (1)** disposable Tier 1 re-attempt at the immutable baselines), this record
-authorizes nothing operational. No rehearsal has run under v1 or v2. Tier 2 remains unexecuted
-and blocked on B1 and B2; Approval B (Tier 2) and any second Tier 1 attempt remain separate,
-later Product Owner actions.
+C (**exactly one (1)** disposable Tier 1 re-attempt at the immutable baselines — executed and
+passed 2026-08-28, Addendum D), this record authorizes nothing operational. Tier 2 remains
+unexecuted and blocked on B1 and B2; Approval B (Tier 2) and any second Tier 1 attempt remain
+separate, later Product Owner actions.
 
 ## Affected documents
 
@@ -320,7 +353,8 @@ later Product Owner actions.
 - [ADR-0011](../adr/0011-cutover-channel-case-ref-is-support-chat-conversation-uuid.md) — F1 correction to ADR-0010 §4 `channel_case_ref` semantics (**Accepted** 2026-08-27).
 - [F1 implementation acceptance companion record (Universal Telegram)](https://github.com/magpern/universal-telegram/blob/main/docs/closure/sc-m03-final-cutover-f1-identity-correction-implementation-approval.md).
 - [F1 remediation plan (Support Chat companion)](../plans/sc-m03-final-cutover-f1-channel-case-ref-remediation-plan-v1.md); primary in Universal Telegram.
-- [Tier 1 closure](../closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md) — the finding of record.
+- [Tier 1 closure](../closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md) — the halted first attempt / finding of record.
+- [Tier 1 re-attempt closure](../closure/sc-m03-final-cutover-dev-rehearsal-tier1-reattempt-closure.md) — the single authorised re-attempt, executed and passed 2026-08-28.
 - [Support Chat companion rehearsal plan v1](../plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md) (superseded) and [companion v2](../plans/sc-m03-final-cutover-dev-rehearsal-plan-v2.md) (current).
 - [F1 implementation closure (Support Chat)](../closure/sc-m03-final-cutover-f1-identity-correction-implementation-closure.md).
 - Primary operator runbook (Universal Telegram) — v1 `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md` (superseded); **v2** `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v2.md` (current); Approval A addendum (**recorded 2026-08-28**) `https://github.com/magpern/universal-telegram/blob/main/docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md`.
