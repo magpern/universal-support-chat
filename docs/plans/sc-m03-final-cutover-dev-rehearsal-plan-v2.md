@@ -53,6 +53,16 @@ Post-merge, the real dual-plugin interop harness (merged UT `main` + this reposi
 branch, fresh disposable database per run) passed **OK (47 tests, 722 assertions)** on **both**
 supported WP/PHP variants.
 
+The current `origin/main` heads — universal-support-chat `2000eaf88fd223025e323d249496f7944a2db3e9`
+and universal-telegram `33b042ff98a3d78e9d6b2ac1c9eb6aa78bfb23b7` — are what this runbook pins
+(§1). Between the F1 closure commits (`5d81b5b7795ee50f3a79e535a483d7677b36d1c0` /
+`32f17ea904a33cdd1f9b0225ba9638f95a09d883`) and these heads, **only files under `docs/` were
+added or amended** — DEV rehearsal runbook v2, its Approval A addendum, this decision record, and
+registry / milestone pointers. The `src/`, `tests/`, configuration, and CI-workflow trees are
+byte-for-byte those of the F1 correction (universal-support-chat `9144cb1`, universal-telegram
+`7d4cc4f`); **no code, schema, `db_version`, test, configuration, workflow, or runtime change
+occurred after F1.**
+
 **F1 is no longer a code blocker.** A Tier 1 re-attempt requires a **separate Approval A
 addendum** (Universal Telegram
 [`docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md`](https://github.com/magpern/universal-telegram/blob/main/docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md),
@@ -66,13 +76,14 @@ Tier 2 remains blocked on B1 and B2.
 - F1 remediation: [`docs/plans/sc-m03-final-cutover-f1-channel-case-ref-remediation-plan-v1.md`](sc-m03-final-cutover-f1-channel-case-ref-remediation-plan-v1.md); F1 implementation closure [`docs/closure/sc-m03-final-cutover-f1-identity-correction-implementation-closure.md`](../closure/sc-m03-final-cutover-f1-identity-correction-implementation-closure.md).
 - Universal Telegram companion architecture: ADR-0042 as amended by ADR-0043.
 
-**Baselines this rehearsal pins (freshly fetched `origin/main`, both HEAD — include the F1
-correction and its closure):**
+**Baselines this rehearsal pins (the current `origin/main` HEAD of each repository, freshly
+fetched — these contain the F1 correction, its closure, and this runbook v2 with its corrected
+Approval A addendum; documentation only was added since the F1 closure):**
 
 | Repository | Pinned SHA |
 |---|---|
-| `magpern/universal-support-chat` | `5d81b5b7795ee50f3a79e535a483d7677b36d1c0` — plugin `0.6.0`, `universal_support_chat_db_version` `11` (unchanged by F1) |
-| `magpern/universal-telegram` | `32f17ea904a33cdd1f9b0225ba9638f95a09d883` — plugin `0.19.0`, schema `target_version()` `36` (unchanged by F1) |
+| `magpern/universal-support-chat` | `2000eaf88fd223025e323d249496f7944a2db3e9` — plugin `0.6.0`, `universal_support_chat_db_version` `11` (unchanged by F1). `src/`+`tests/` identical to the F1 comment corrections (`9144cb1`); only `docs/` added since the F1 closure (`5d81b5b`). |
+| `magpern/universal-telegram` | `33b042ff98a3d78e9d6b2ac1c9eb6aa78bfb23b7` — plugin `0.19.0`, schema `target_version()` `36` (unchanged by F1). `src/`+`tests/` identical to the F1 runtime correction (`7d4cc4f`); only `docs/` added since the F1 closure (`32f17ea`). |
 
 ## 2. Tier boundary — Tier 1 is not the DEV rehearsal (unchanged from v1 §2)
 
@@ -148,8 +159,8 @@ v1 §4 assumptions **A2, A5 unchanged.** Revised:
 
 | # | Assumption | Verify |
 |---|---|---|
-| A1 | Checked-out plugin SHAs equal the **v2** baselines (`5d81b5b…` / `32f17ea…`); schema SC `11` / UT `36`. | `git rev-parse HEAD`; `wp eval` on `get_option('universal_support_chat_db_version')` / `Migrator::target_version()`. |
-| A3 | Whether Universal Telegram's `cutover begin` preflight enforces the Support-Chat-side "mapping-complete" cross-check, or only the local `prepared` binding. | read UT `CutoverActivationService::preflight()` at `32f17ea…`; drive a candidate whose SC map row is not `migrated` and observe whether `begin` refuses it. |
+| A1 | Checked-out plugin SHAs equal the **v2** baselines (`2000eaf…` / `33b042f…`); schema SC `11` / UT `36`. | `git rev-parse HEAD`; `wp eval` on `get_option('universal_support_chat_db_version')` / `Migrator::target_version()`. |
+| A3 | Whether Universal Telegram's `cutover begin` preflight enforces the Support-Chat-side "mapping-complete" cross-check, or only the local `prepared` binding. | read UT `CutoverActivationService::preflight()` at `33b042f…` (identical to `7d4cc4f` — the F1-correction code tree); drive a candidate whose SC map row is not `migrated` and observe whether `begin` refuses it. |
 | A4 | The exact Support Chat CLI used to confirm `status='migrated'` is `wp universal-support-chat legacy-migrate status` / `validate`. | confirm against `LegacyMigrateCommand.php`; cross-check a known `legacy_migration_map` row via `wp eval`. |
 | **A9 (new)** | A real `legacy-bind`-prepared binding (independent `binding_uuid`) is now handed off successfully — F1's correction holds end-to-end in the disposable harness. | primary runbook Run 1 step 11a: activate one real binding, buffer one operator reply, one `replay-deferred-updates` pass, assert `OUTCOME_HANDED_OFF` + one `legacy_handoff_map` row whose `channel_case_ref` is the conversation UUID ≠ `binding_uuid`. **A hard gate before `cutover begin`.** |
 
