@@ -14,6 +14,7 @@ use UniversalSupportChat\Conversations\RetentionCleanupHandler;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
 use UniversalSupportChat\Core\Configuration\Settings;
 use UniversalSupportChat\Persistence\Migrator;
+use UniversalSupportChat\TelegramDispatch\DispatchWorker;
 
 /**
  * Always revokes capabilities. Optionally removes plugin data when
@@ -37,12 +38,15 @@ final class Uninstaller {
 			wp_unschedule_event( $nonce_timestamp, NonceCleanupHandler::CRON_HOOK );
 		}
 
+		DispatchWorker::unschedule();
+
 		$settings = ( new Settings() )->get();
 
 		if ( true !== $settings['remove_data_on_uninstall'] ) {
 			return;
 		}
 
+		$this->drop_table( Migrator::TELEGRAM_DISPATCH_TABLE );
 		$this->drop_table( Migrator::AUDIT_LOG_TABLE );
 		$this->drop_table( Migrator::CONVERSATION_NOTES_TABLE );
 		$this->drop_table( Migrator::CONVERSATION_MESSAGES_TABLE );

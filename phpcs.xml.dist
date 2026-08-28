@@ -70,12 +70,6 @@
 		<exclude-pattern>*/tests/integration/Interop/bootstrap.php</exclude-pattern>
 		<exclude-pattern>*/bin/check-doc-links.php</exclude-pattern>
 	</rule>
-	<!-- Interop's own SQL-literal source scan reads plugin PHP source
-	     files as plain text, never a remote URL. -->
-	<rule ref="WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents">
-		<exclude-pattern>*/tests/integration/Interop/LegacyExportClientIntegrationTest.php</exclude-pattern>
-	</rule>
-
 	<!-- Enum-backed internal exceptions are not web output. -->
 	<rule ref="WordPress.Security.EscapeOutput.ExceptionNotEscaped">
 		<severity>0</severity>

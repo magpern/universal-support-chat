@@ -63,3 +63,24 @@ jobs:
         run: bin/docker/composer.sh install --no-interaction
       - name: Check documentation links
         run: bin/docker/composer.sh run-script check-doc-links
+
+  interop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout universal-support-chat
+        uses: actions/checkout@v7
+      # Pinned to the merged Universal Telegram transport-only commit
+      # (ADR-0044) this feature was built and verified against — never a
+      # floating branch. Bump deliberately alongside the SC-side changes.
+      - name: Checkout universal-telegram (pinned)
+        uses: actions/checkout@v7
+        with:
+          repository: magpern/universal-telegram
+          ref: 1af1cf3d9011060cb9244adfd93cfa916acfbdc6
+          path: universal-telegram-sibling
+      - name: Install dependencies
+        run: bin/docker/composer.sh install --no-interaction
+      - name: Cross-plugin interop suite (real dual-plugin, real Contract v1)
+        env:
+          UNIVERSAL_TELEGRAM_HOST_PATH: ${{ github.workspace }}/universal-telegram-sibling
+        run: bin/docker/test-integration-interop.sh --wp-version=6.9 --php-version=8.1

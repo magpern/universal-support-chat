@@ -18,6 +18,7 @@ use UniversalSupportChat\Conversations\ConversationRepository;
 use UniversalSupportChat\Conversations\ConversationStatus;
 use UniversalSupportChat\Conversations\MessageRepository;
 use UniversalSupportChat\Privacy\Classification;
+use UniversalSupportChat\TelegramDispatch\DispatchEnqueuer;
 
 /**
  * Runs only after SignatureVerifier has accepted a call (ADR-0007 §4): every
@@ -81,6 +82,15 @@ final class ContractOperationDispatcher {
 	private HandoffMapRepository $handoff_map;
 
 	/**
+	 * Optional Telegram dispatch enqueuer (ADR-0012) — used only to stamp
+	 * a permanent suppression marker on a Telegram-originated operator
+	 * reply so it can never be mirrored back out to Telegram.
+	 *
+	 * @var DispatchEnqueuer|null
+	 */
+	private ?DispatchEnqueuer $dispatch;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param ConversationRepository  $conversations  Conversation repository.
@@ -88,19 +98,22 @@ final class ContractOperationDispatcher {
 	 * @param ChannelStatusRepository $channel_status Channel status repository.
 	 * @param AuditLogger             $audit          Audit logger.
 	 * @param HandoffMapRepository    $handoff_map    SC-owned final-cutover handoff-provenance map.
+	 * @param DispatchEnqueuer|null   $dispatch       Optional Telegram dispatch enqueuer (loop prevention).
 	 */
 	public function __construct(
 		ConversationRepository $conversations,
 		MessageRepository $messages,
 		ChannelStatusRepository $channel_status,
 		AuditLogger $audit,
-		HandoffMapRepository $handoff_map
+		HandoffMapRepository $handoff_map,
+		?DispatchEnqueuer $dispatch = null
 	) {
 		$this->conversations  = $conversations;
 		$this->messages       = $messages;
 		$this->channel_status = $channel_status;
 		$this->audit          = $audit;
 		$this->handoff_map    = $handoff_map;
+		$this->dispatch       = $dispatch;
 	}
 
 	/**
@@ -172,6 +185,12 @@ final class ContractOperationDispatcher {
 
 				if ( null === $message ) {
 					return $this->error( 503, 'request_failed' );
+				}
+
+				if ( null !== $this->dispatch ) {
+					// Loop prevention (ADR-0012): a reply that arrived
+					// *from* Telegram must never be mirrored back out.
+					$this->dispatch->mark_telegram_origin( $message, $conversation->uuid() );
 				}
 
 				$this->advance_after_operator_reply( $conversation );

@@ -47,3 +47,9 @@ This foundation documentation freeze includes boundary plans for the initial roa
 | [sc-m06-support-availability-and-offline-tickets-plan-v1.md](sc-m06-support-availability-and-offline-tickets-plan-v1.md) | SC-M06 |
 | [sc-ai1-operator-ai-drafts-approve-and-send-plan-v1.md](sc-ai1-operator-ai-drafts-approve-and-send-plan-v1.md) | SC-AI1 |
 | [sc-ai2-controlled-direct-ai-responses-plan-v1.md](sc-ai2-controlled-direct-ai-responses-plan-v1.md) | SC-AI2 |
+
+## Post-freeze feature plans
+
+| Plan | Scope |
+|---|---|
+| [sc-telegram-adapter-dispatch-plan-v1.md](sc-telegram-adapter-dispatch-plan-v1.md) | ADR-0012 — automatic Support Chat → Telegram message dispatch (SC-owned outbox); realises the SC-owned-delivery half of Universal Telegram ADR-0044 |

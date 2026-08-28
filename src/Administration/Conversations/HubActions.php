@@ -19,6 +19,7 @@ use UniversalSupportChat\Conversations\NoteRepository;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
 use UniversalSupportChat\Persistence\SchemaHealth;
 use UniversalSupportChat\Privacy\Classification;
+use UniversalSupportChat\TelegramDispatch\DispatchEnqueuer;
 
 /**
  * Capability + CSRF gated Hub mutations. Never audits plaintext bodies.
@@ -63,6 +64,13 @@ final class HubActions {
 	private AuditLogger $audit;
 
 	/**
+	 * Optional Telegram dispatch enqueuer (ADR-0012).
+	 *
+	 * @var DispatchEnqueuer|null
+	 */
+	private ?DispatchEnqueuer $dispatch;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param SchemaHealth           $schema_health Schema health.
@@ -70,19 +78,22 @@ final class HubActions {
 	 * @param MessageRepository      $messages      Messages.
 	 * @param NoteRepository         $notes         Notes.
 	 * @param AuditLogger            $audit         Audit logger.
+	 * @param DispatchEnqueuer|null  $dispatch      Optional Telegram dispatch enqueuer.
 	 */
 	public function __construct(
 		SchemaHealth $schema_health,
 		ConversationRepository $conversations,
 		MessageRepository $messages,
 		NoteRepository $notes,
-		AuditLogger $audit
+		AuditLogger $audit,
+		?DispatchEnqueuer $dispatch = null
 	) {
 		$this->schema_health = $schema_health;
 		$this->conversations = $conversations;
 		$this->messages      = $messages;
 		$this->notes         = $notes;
 		$this->audit         = $audit;
+		$this->dispatch      = $dispatch;
 	}
 
 	/**
@@ -117,13 +128,20 @@ final class HubActions {
 			$this->redirect( 0, 'invalid' );
 		}
 
-		$message = $this->messages->create(
+		$create = fn (): ?ConversationMessage => $this->messages->create(
 			$conversation->id(),
 			ConversationMessage::DIRECTION_OPERATOR,
 			$text,
 			'stored',
 			null
 		);
+
+		// When Telegram dispatch is enabled the message row and its outbox
+		// row are written in one transaction (ADR-0012); otherwise this is
+		// a plain message create.
+		$message = null !== $this->dispatch
+			? $this->dispatch->persist_and_enqueue( $conversation->uuid(), $create )
+			: $create();
 
 		if ( null === $message ) {
 			$this->redirect( $conversation_id, 'reply_failed' );

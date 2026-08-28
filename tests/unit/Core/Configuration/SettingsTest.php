@@ -19,6 +19,15 @@ final class SettingsTest extends TestCase {
 		$this->assertSame( 30, $defaults['conversation_archived_body_days'] );
 		$this->assertSame( 90, $defaults['conversation_purge_days'] );
 		$this->assertTrue( $defaults['widget_enabled'] );
+		$this->assertFalse( $defaults['telegram_dispatch_enabled'] );
+	}
+
+	public function test_telegram_dispatch_flag_is_opt_in_and_coerced(): void {
+		$settings = new Settings();
+
+		$this->assertFalse( $settings->sanitize( array() )['telegram_dispatch_enabled'] );
+		$this->assertTrue( $settings->sanitize( array( 'telegram_dispatch_enabled' => '1' ) )['telegram_dispatch_enabled'] );
+		$this->assertFalse( $settings->sanitize( array( 'telegram_dispatch_enabled' => '0' ) )['telegram_dispatch_enabled'] );
 	}
 
 	public function test_sanitize_coerces_truthy_flag(): void {

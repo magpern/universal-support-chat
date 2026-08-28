@@ -15,6 +15,7 @@ use UniversalSupportChat\Conversations\ConversationRepository;
 use UniversalSupportChat\Conversations\ConversationStatus;
 use UniversalSupportChat\Conversations\MessageRepository;
 use UniversalSupportChat\Persistence\SchemaHealth;
+use UniversalSupportChat\TelegramDispatch\DispatchEnqueuer;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -50,20 +51,30 @@ final class ConversationsController {
 	private MessageRepository $messages;
 
 	/**
+	 * Optional Telegram dispatch enqueuer (ADR-0012).
+	 *
+	 * @var DispatchEnqueuer|null
+	 */
+	private ?DispatchEnqueuer $dispatch;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param SchemaHealth           $schema_health Schema availability gate.
 	 * @param ConversationRepository $conversations Conversation repository.
 	 * @param MessageRepository      $messages      Message repository.
+	 * @param DispatchEnqueuer|null  $dispatch      Optional Telegram dispatch enqueuer.
 	 */
 	public function __construct(
 		SchemaHealth $schema_health,
 		ConversationRepository $conversations,
-		MessageRepository $messages
+		MessageRepository $messages,
+		?DispatchEnqueuer $dispatch = null
 	) {
 		$this->schema_health = $schema_health;
 		$this->conversations = $conversations;
 		$this->messages      = $messages;
+		$this->dispatch      = $dispatch;
 	}
 
 	/**
@@ -225,13 +236,20 @@ final class ConversationsController {
 		$idempotency = $request->get_param( 'idempotency_key' );
 		$idempotency = is_string( $idempotency ) && $this->is_uuid( $idempotency ) ? $idempotency : null;
 
-		$message = $this->messages->create(
+		$create = fn (): ?ConversationMessage => $this->messages->create(
 			$conversation->id(),
 			ConversationMessage::DIRECTION_VISITOR,
 			$text,
 			'stored',
 			$idempotency
 		);
+
+		// When Telegram dispatch is enabled the message row and its outbox
+		// row are written in one transaction (ADR-0012); otherwise this is
+		// a plain message create.
+		$message = null !== $this->dispatch
+			? $this->dispatch->persist_and_enqueue( $conversation->uuid(), $create )
+			: $create();
 
 		if ( null === $message ) {
 			return $this->error( 'request_failed', 503 );
