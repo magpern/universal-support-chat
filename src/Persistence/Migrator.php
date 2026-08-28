@@ -575,293 +575,67 @@ class Migrator {
 	}
 
 	/**
-	 * Creates the SC-M03 work packages 3-4 legacy migration metadata tables
-	 * (ADR-0008, sc-m03-wp3-wp4-legacy-migration-engine-plan-v1.md §4.3).
-	 * Every non-ciphertext column here holds only IDs, timestamps, booleans,
-	 * or counts — never plaintext or a content-derived digest (plan §4.5).
+	 * Steps 9, 10, and 11 — SC-M03 legacy-migration / final-cutover schema —
+	 * are RETIRED (ADR-0013). Universal Telegram ADR-0044 made that plugin
+	 * transport/adapter-only, so the legacy export, Phase A/Phase B
+	 * migration, quiescence, binding-preparation, and cutover-handoff
+	 * machinery these tables served can no longer operate and has been
+	 * removed from `src/`.
+	 *
+	 * On a FRESH install these three steps are inert no-ops: they create no
+	 * `legacy_migration_*` and no `legacy_handoff_map` table. The schema
+	 * version still advances through 9 → 10 → 11 → 12 so `db_version` stays
+	 * monotonic at 12 and step 12 (the ADR-0012 dispatch outbox) installs
+	 * exactly as before.
+	 *
+	 * On an install that was ALREADY upgraded past these steps the tables
+	 * remain in place, untouched — they are historical, inert data. This
+	 * migrator never drops, purges, or reinterprets them. Their name-only
+	 * manifest constants (`LEGACY_MIGRATION_*_TABLE`, `LEGACY_HANDOFF_MAP_TABLE`)
+	 * are retained for uninstall compatibility and diagnostics. Removing
+	 * that historical data, if ever desired, needs a separately approved,
+	 * guarded cleanup task — it is deliberately out of scope here.
 	 */
 	private function step_9_create_legacy_migration_tables(): void {
-		global $wpdb;
-
-		$charset_collate = $wpdb->get_charset_collate();
-
-		$runs_table = $wpdb->prefix . self::LEGACY_MIGRATION_RUNS_TABLE;
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$wpdb->query(
-			"CREATE TABLE IF NOT EXISTS {$runs_table} (
-				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-				run_uuid CHAR(36) NOT NULL,
-				phase VARCHAR(16) NOT NULL,
-				status VARCHAR(16) NOT NULL DEFAULT 'running',
-				dry_run TINYINT(1) NOT NULL DEFAULT 0,
-				batch_size INT UNSIGNED NOT NULL,
-				checkpoint_cursor BIGINT UNSIGNED NOT NULL DEFAULT 0,
-				started_at DATETIME NOT NULL,
-				completed_at DATETIME NULL,
-				created_by_user_id BIGINT UNSIGNED NULL,
-				PRIMARY KEY (id),
-				UNIQUE KEY run_uuid (run_uuid),
-				KEY phase_status (phase, status)
-			) {$charset_collate}"
-		);
-
-		$map_table = $wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE;
-		$wpdb->query(
-			"CREATE TABLE IF NOT EXISTS {$map_table} (
-				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-				source_conversation_id BIGINT UNSIGNED NOT NULL,
-				source_conversation_uuid CHAR(36) NOT NULL,
-				target_conversation_id BIGINT UNSIGNED NULL,
-				target_conversation_uuid CHAR(36) NULL,
-				status VARCHAR(16) NOT NULL DEFAULT 'pending',
-				legacy_bot_id BIGINT UNSIGNED NULL,
-				legacy_destination_id BIGINT UNSIGNED NULL,
-				legacy_telegram_topic_id BIGINT UNSIGNED NULL,
-				legacy_topic_creation_state VARCHAR(32) NULL,
-				legacy_topic_lifecycle_state VARCHAR(32) NULL,
-				message_count_source INT UNSIGNED NOT NULL DEFAULT 0,
-				message_count_target INT UNSIGNED NOT NULL DEFAULT 0,
-				note_count_source INT UNSIGNED NOT NULL DEFAULT 0,
-				note_count_target INT UNSIGNED NOT NULL DEFAULT 0,
-				validation_passed TINYINT(1) NULL,
-				validated_at DATETIME NULL,
-				error_reason VARCHAR(191) NULL,
-				migrated_at DATETIME NULL,
-				created_at DATETIME NOT NULL,
-				updated_at DATETIME NOT NULL,
-				PRIMARY KEY (id),
-				UNIQUE KEY source_conversation_id (source_conversation_id),
-				UNIQUE KEY source_conversation_uuid (source_conversation_uuid),
-				KEY status (status)
-			) {$charset_collate}"
-		);
-
-		$message_map_table = $wpdb->prefix . self::LEGACY_MIGRATION_MESSAGE_MAP_TABLE;
-		$wpdb->query(
-			"CREATE TABLE IF NOT EXISTS {$message_map_table} (
-				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-				conversation_map_id BIGINT UNSIGNED NOT NULL,
-				kind VARCHAR(16) NOT NULL,
-				source_id BIGINT UNSIGNED NOT NULL,
-				source_uuid CHAR(36) NOT NULL,
-				target_id BIGINT UNSIGNED NULL,
-				target_uuid CHAR(36) NULL,
-				idempotency_key CHAR(36) NULL,
-				created_at DATETIME NOT NULL,
-				PRIMARY KEY (id),
-				UNIQUE KEY conversation_kind_source (conversation_map_id, kind, source_id),
-				KEY conversation_map_id (conversation_map_id)
-			) {$charset_collate}"
-		);
-
-		$batch_log_table = $wpdb->prefix . self::LEGACY_MIGRATION_BATCH_LOG_TABLE;
-		$wpdb->query(
-			"CREATE TABLE IF NOT EXISTS {$batch_log_table} (
-				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-				run_id BIGINT UNSIGNED NOT NULL,
-				batch_number INT UNSIGNED NOT NULL,
-				cursor_start BIGINT UNSIGNED NOT NULL,
-				cursor_end BIGINT UNSIGNED NOT NULL,
-				rows_processed INT UNSIGNED NOT NULL DEFAULT 0,
-				rows_migrated INT UNSIGNED NOT NULL DEFAULT 0,
-				rows_skipped INT UNSIGNED NOT NULL DEFAULT 0,
-				rows_failed INT UNSIGNED NOT NULL DEFAULT 0,
-				started_at DATETIME NOT NULL,
-				completed_at DATETIME NULL,
-				error_summary VARCHAR(191) NULL,
-				PRIMARY KEY (id),
-				KEY run_id (run_id)
-			) {$charset_collate}"
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// Retired (ADR-0013) — intentionally does nothing. See the block comment above.
 	}
 
 	/**
-	 * Verifies step 9's four tables and their columns exist, and that no
-	 * plaintext/content-derived column was accidentally added (only IDs,
-	 * timestamps, booleans, counts, and short stable reason strings).
-	 */
-	private function verify_step_9(): bool {
-		global $wpdb;
-
-		$runs_ok = $this->table_has_columns(
-			$wpdb->prefix . self::LEGACY_MIGRATION_RUNS_TABLE,
-			array( 'id', 'run_uuid', 'phase', 'status', 'dry_run', 'batch_size', 'checkpoint_cursor', 'started_at', 'completed_at', 'created_by_user_id' )
-		);
-
-		$map_ok = $this->table_has_columns(
-			$wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE,
-			array(
-				'id',
-				'source_conversation_id',
-				'source_conversation_uuid',
-				'target_conversation_id',
-				'target_conversation_uuid',
-				'status',
-				'legacy_bot_id',
-				'legacy_destination_id',
-				'legacy_telegram_topic_id',
-				'legacy_topic_creation_state',
-				'legacy_topic_lifecycle_state',
-				'message_count_source',
-				'message_count_target',
-				'note_count_source',
-				'note_count_target',
-				'validation_passed',
-				'validated_at',
-				'error_reason',
-				'migrated_at',
-				'created_at',
-				'updated_at',
-			)
-		);
-
-		$message_map_ok = $this->table_has_columns(
-			$wpdb->prefix . self::LEGACY_MIGRATION_MESSAGE_MAP_TABLE,
-			array( 'id', 'conversation_map_id', 'kind', 'source_id', 'source_uuid', 'target_id', 'target_uuid', 'idempotency_key', 'created_at' )
-		);
-
-		$batch_log_ok = $this->table_has_columns(
-			$wpdb->prefix . self::LEGACY_MIGRATION_BATCH_LOG_TABLE,
-			array( 'id', 'run_id', 'batch_number', 'cursor_start', 'cursor_end', 'rows_processed', 'rows_migrated', 'rows_skipped', 'rows_failed', 'started_at', 'completed_at', 'error_summary' )
-		);
-
-		if ( ! $runs_ok || ! $map_ok || ! $message_map_ok || ! $batch_log_ok ) {
-			return false;
-		}
-
-		// Never any plaintext/body column, and never a Telegram-native
-		// identifier column (bot_id/destination_id/topic id are already
-		// covered above as legacy_*-prefixed, non-content routing evidence
-		// only — this forbids anything additional creeping in).
-		$forbidden_content_columns = array( 'body', 'body_ciphertext', 'plaintext', 'content_hash', 'digest' );
-
-		return ! $this->table_has_any_column( $wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE, $forbidden_content_columns )
-			&& ! $this->table_has_any_column( $wpdb->prefix . self::LEGACY_MIGRATION_MESSAGE_MAP_TABLE, $forbidden_content_columns )
-			&& ! $this->table_has_any_column( $wpdb->prefix . self::LEGACY_MIGRATION_BATCH_LOG_TABLE, $forbidden_content_columns );
-	}
-
-	/**
-	 * Adds SC-M03 work package 5's binding-outcome columns to the existing
-	 * `legacy_migration_map` row (ADR-0009 §6), additive only. Terminal
-	 * outcomes write `binding_status`/`binding_error_reason`/`binding_uuid`/
-	 * `binding_attempted_at`; every attempt, terminal or retryable, writes
-	 * `binding_last_attempt_at`/`binding_last_attempt_reason` — kept
-	 * strictly separate so the retryable columns can never participate in
-	 * the `status = 'migrated' AND binding_status IS NULL` rescan
-	 * predicate.
+	 * Retired (ADR-0013). See {@see step_9_create_legacy_migration_tables()}.
 	 */
 	private function step_10_add_legacy_migration_map_binding_columns(): void {
-		global $wpdb;
-
-		$table = $wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE;
-
-		$columns = array(
-			'binding_status'              => "ALTER TABLE {$table} ADD COLUMN binding_status VARCHAR(16) NULL AFTER migrated_at",
-			'binding_error_reason'        => "ALTER TABLE {$table} ADD COLUMN binding_error_reason VARCHAR(191) NULL AFTER binding_status",
-			'binding_uuid'                => "ALTER TABLE {$table} ADD COLUMN binding_uuid CHAR(36) NULL AFTER binding_error_reason",
-			'binding_attempted_at'        => "ALTER TABLE {$table} ADD COLUMN binding_attempted_at DATETIME NULL AFTER binding_uuid",
-			'binding_last_attempt_at'     => "ALTER TABLE {$table} ADD COLUMN binding_last_attempt_at DATETIME NULL AFTER binding_attempted_at",
-			'binding_last_attempt_reason' => "ALTER TABLE {$table} ADD COLUMN binding_last_attempt_reason VARCHAR(191) NULL AFTER binding_last_attempt_at",
-		);
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared -- fixed table/column names.
-		// SHOW COLUMNS (this connection), not INFORMATION_SCHEMA — a DROP
-		// TABLE + recreate (or a full remigration from db_version 0) within
-		// the same PHPUnit process can otherwise leave INFORMATION_SCHEMA's
-		// cached view stale, reporting a column "exists" when the live
-		// table does not actually have it yet (the identical reasoning
-		// step_29's own column checks already document).
-		foreach ( $columns as $column => $alter_sql ) {
-			if ( empty( $wpdb->get_results( "SHOW COLUMNS FROM {$table} LIKE '{$column}'" ) ) ) {
-				$wpdb->query( $alter_sql );
-			}
-		}
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
-
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
-		if ( empty( $wpdb->get_results( "SHOW INDEX FROM {$table} WHERE Key_name = 'binding_status'" ) ) ) {
-			$wpdb->query( "ALTER TABLE {$table} ADD KEY binding_status (binding_status)" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
-		}
+		// Retired (ADR-0013) — intentionally does nothing.
 	}
 
 	/**
-	 * Verifies step 10's six additive columns exist, and that none of them
-	 * is a forbidden content column.
-	 */
-	private function verify_step_10(): bool {
-		global $wpdb;
-
-		$columns_ok = $this->table_has_columns(
-			$wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE,
-			array(
-				'binding_status',
-				'binding_error_reason',
-				'binding_uuid',
-				'binding_attempted_at',
-				'binding_last_attempt_at',
-				'binding_last_attempt_reason',
-			)
-		);
-
-		$forbidden_content_columns = array( 'body', 'body_ciphertext', 'plaintext', 'content_hash', 'digest' );
-
-		return $columns_ok && ! $this->table_has_any_column( $wpdb->prefix . self::LEGACY_MIGRATION_MAP_TABLE, $forbidden_content_columns );
-	}
-
-	/**
-	 * Creates the SC-owned final-cutover handoff-provenance map (ADR-0010
-	 * §4, `channel_case_ref` semantics corrected by ADR-0011): one row per
-	 * successfully dispositioned deferred-update row, written only inside
-	 * the same transaction as the domain effect it accompanies. `kind` is
-	 * always server-derived (never client-supplied); `channel_case_ref` is
-	 * always populated with the Support Chat conversation UUID this call
-	 * resolved (via `ConversationRepository::find_by_uuid()`), never the
-	 * adapter's own binding UUID, used for the provenance-conflict identity
-	 * check on a duplicate `(bot_id, update_id)`. `target_message_uuid` is
-	 * populated only for `kind = 'message'`. No column here is ever
-	 * content-bearing.
+	 * Retired (ADR-0013). See {@see step_9_create_legacy_migration_tables()}.
 	 */
 	private function step_11_create_legacy_handoff_map_table(): void {
-		global $wpdb;
-
-		$table           = $wpdb->prefix . self::LEGACY_HANDOFF_MAP_TABLE;
-		$charset_collate = $wpdb->get_charset_collate();
-
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$wpdb->query(
-			"CREATE TABLE IF NOT EXISTS {$table} (
-				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-				bot_id BIGINT UNSIGNED NOT NULL,
-				update_id BIGINT NOT NULL,
-				kind VARCHAR(24) NOT NULL,
-				channel_case_ref CHAR(36) NOT NULL,
-				target_message_uuid CHAR(36) NULL,
-				created_at DATETIME NOT NULL,
-				PRIMARY KEY (id),
-				UNIQUE KEY bot_update (bot_id, update_id)
-			) {$charset_collate}"
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// Retired (ADR-0013) — intentionally does nothing.
 	}
 
 	/**
-	 * Verifies the handoff-map table exists with the expected columns, and
-	 * carries no forbidden content column.
+	 * Postcondition for the retired SC-M03 steps 9–11 (ADR-0013): there is
+	 * nothing to verify — a fresh install creates none of these tables, and
+	 * an upgraded install's historical tables are deliberately left
+	 * untouched. Always satisfied.
+	 */
+	private function verify_step_9(): bool {
+		return true;
+	}
+
+	/**
+	 * Postcondition for retired step 10 (ADR-0013). Always satisfied.
+	 */
+	private function verify_step_10(): bool {
+		return true;
+	}
+
+	/**
+	 * Postcondition for retired step 11 (ADR-0013). Always satisfied.
 	 */
 	private function verify_step_11(): bool {
-		global $wpdb;
-
-		$table = $wpdb->prefix . self::LEGACY_HANDOFF_MAP_TABLE;
-
-		$columns_ok = $this->table_has_columns(
-			$table,
-			array( 'id', 'bot_id', 'update_id', 'kind', 'channel_case_ref', 'target_message_uuid', 'created_at' )
-		);
-
-		$forbidden_content_columns = array( 'body', 'body_ciphertext', 'plaintext', 'content_hash', 'digest' );
-
-		return $columns_ok && ! $this->table_has_any_column( $table, $forbidden_content_columns );
+		return true;
 	}
 
 	/**

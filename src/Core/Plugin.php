@@ -29,7 +29,6 @@ use UniversalSupportChat\ChannelContract\ContractDiscovery;
 use UniversalSupportChat\ChannelContract\Outbound\AdapterContractClient;
 use UniversalSupportChat\ChannelContract\Outbound\InProcessContractTransport;
 use UniversalSupportChat\ChannelContract\Outbound\SignatureSigner as OutboundSignatureSigner;
-use UniversalSupportChat\ChannelContract\HandoffMapRepository;
 use UniversalSupportChat\ChannelContract\Rest\ContractOperationDispatcher;
 use UniversalSupportChat\ChannelContract\Rest\ContractOperationsController;
 use UniversalSupportChat\ChatWidget\WidgetAssets;
@@ -41,19 +40,6 @@ use UniversalSupportChat\Conversations\RetentionCleanupHandler;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
 use UniversalSupportChat\Core\Configuration\Settings;
 use UniversalSupportChat\Core\Security\CredentialVault;
-use UniversalSupportChat\Migration\Cli\LegacyBindCommand;
-use UniversalSupportChat\Migration\Cli\LegacyMigrateCommand;
-use UniversalSupportChat\Migration\InProcessLegacyBindingImportClient;
-use UniversalSupportChat\Migration\InProcessLegacyExportClient;
-use UniversalSupportChat\Migration\LegacyBindingImportService;
-use UniversalSupportChat\Migration\LegacyMigrationBatchLogRepository;
-use UniversalSupportChat\Migration\LegacyMigrationMapRepository;
-use UniversalSupportChat\Migration\LegacyMigrationMessageMapRepository;
-use UniversalSupportChat\Migration\LegacyMigrationRunRepository;
-use UniversalSupportChat\Migration\LegacyMigrationValidator;
-use UniversalSupportChat\Migration\PhaseABackfillService;
-use UniversalSupportChat\Migration\PhaseBReconciliationService;
-use UniversalSupportChat\Migration\UniversalTelegramQuiescenceStateProvider;
 use UniversalSupportChat\Persistence\MigrationFailedException;
 use UniversalSupportChat\Persistence\MigrationLock;
 use UniversalSupportChat\Persistence\Migrator;
@@ -99,14 +85,6 @@ final class Plugin {
 	private ?AdapterContractClient $adapter_contract_client = null;
 
 	/**
-	 * SC-M03 work packages 3-4: conversation-level legacy migration map,
-	 * for tests/diagnostics.
-	 *
-	 * @var LegacyMigrationMapRepository|null
-	 */
-	private ?LegacyMigrationMapRepository $legacy_migration_map = null;
-
-	/**
 	 * ADR-0012 automatic Telegram dispatch worker, for tests/diagnostics.
 	 *
 	 * @var TelegramDispatchService|null
@@ -119,27 +97,6 @@ final class Plugin {
 	 * @var DispatchOutboxRepository|null
 	 */
 	private ?DispatchOutboxRepository $telegram_dispatch_outbox = null;
-
-	/**
-	 * SC-M03 work packages 3-4: Phase A preparatory backfill, for tests.
-	 *
-	 * @var PhaseABackfillService|null
-	 */
-	private ?PhaseABackfillService $phase_a_backfill_service = null;
-
-	/**
-	 * SC-M03 work packages 3-4: Phase B final reconciliation/validation, for tests.
-	 *
-	 * @var PhaseBReconciliationService|null
-	 */
-	private ?PhaseBReconciliationService $phase_b_reconciliation_service = null;
-
-	/**
-	 * SC-M03 work packages 3-4: read-only migration validators, for tests.
-	 *
-	 * @var LegacyMigrationValidator|null
-	 */
-	private ?LegacyMigrationValidator $legacy_migration_validator = null;
 
 	/**
 	 * Singleton accessor.
@@ -196,7 +153,6 @@ final class Plugin {
 		$channel_status = new ChannelStatusRepository( $schema_health );
 		$pairing        = new PairingService( $peers, $audit );
 		$verifier       = new SignatureVerifier( $peers, $nonces );
-		$handoff_map    = new HandoffMapRepository( $schema_health );
 
 		// ADR-0012: automatic Support Chat -> Telegram message dispatch.
 		// The outbox is Support-Chat-owned durable delivery state; the
@@ -207,7 +163,7 @@ final class Plugin {
 		$dispatch_outbox   = new DispatchOutboxRepository( $schema_health );
 		$dispatch_enqueuer = new DispatchEnqueuer( $settings, $dispatch_outbox );
 
-		$dispatcher = new ContractOperationDispatcher( $conversations, $messages, $channel_status, $audit, $handoff_map, $dispatch_enqueuer );
+		$dispatcher = new ContractOperationDispatcher( $conversations, $messages, $channel_status, $audit, $dispatch_enqueuer );
 
 		// SC-M03 work package 1: outbound Contract v1 client (ADR-0005 §4,
 		// ADR-0007). Wired here for future escalation/delivery call sites;
@@ -245,72 +201,15 @@ final class Plugin {
 		( new HubActions( $schema_health, $conversations, $messages, $notes, $audit, $dispatch_enqueuer ) )->register();
 		( new WidgetAssets( $settings, $schema_health ) )->register();
 
-		// SC-M03 work packages 3-4: legacy migration engine (ADR-0008,
-		// sc-m03-wp3-wp4-legacy-migration-engine-plan-v1.md). Reaches
-		// Universal Telegram only through InProcessLegacyExportClient and
-		// UniversalTelegramQuiescenceStateProvider, its own dedicated
-		// WP-CLI command below — never through the widget, Hub, or
-		// Contract v1 request paths above. The quiescence-provider swap
-		// from the permanent default-deny stub to this real, delegating
-		// provider is the composition-root amendment recorded in
-		// docs/closure/sc-m03-wp3-4-phase-b-continuous-quiescence-recheck-addendum.md.
-		$legacy_export_client         = new InProcessLegacyExportClient();
-		$quiescence                   = new UniversalTelegramQuiescenceStateProvider();
-		$legacy_migration_map         = new LegacyMigrationMapRepository( $schema_health );
-		$legacy_migration_message_map = new LegacyMigrationMessageMapRepository( $schema_health );
-		$legacy_migration_runs        = new LegacyMigrationRunRepository( $schema_health );
-		$legacy_migration_batch_log   = new LegacyMigrationBatchLogRepository( $schema_health );
-
-		$this->legacy_migration_map           = $legacy_migration_map;
-		$this->legacy_migration_validator     = new LegacyMigrationValidator( $messages, $notes, $legacy_migration_message_map );
-		$this->phase_a_backfill_service       = new PhaseABackfillService(
-			$legacy_export_client,
-			$conversations,
-			$messages,
-			$notes,
-			$legacy_migration_map,
-			$legacy_migration_message_map,
-			$legacy_migration_runs,
-			$legacy_migration_batch_log
-		);
-		$this->phase_b_reconciliation_service = new PhaseBReconciliationService(
-			$legacy_export_client,
-			$quiescence,
-			$messages,
-			$notes,
-			$legacy_migration_map,
-			$legacy_migration_message_map,
-			$this->legacy_migration_validator
-		);
-
-		( new LegacyMigrateCommand(
-			$this->phase_a_backfill_service,
-			$this->phase_b_reconciliation_service,
-			$legacy_migration_map,
-			$this->legacy_migration_validator
-		) )->register();
-
-		// SC-M03 work package 5: legacy binding preparation (ADR-0009,
-		// sc-m03-wp5-existing-telegram-topic-binding-plan-v1.md). Reaches
-		// Universal Telegram only through
-		// InProcessLegacyBindingImportClient, symmetric to
-		// InProcessLegacyExportClient above; reuses the identical
-		// $quiescence provider as its own early, non-authoritative
-		// pre-check (ADR-0009 §5) — the authoritative guard is Universal
-		// Telegram's own lock-scoped assertion inside
-		// LegacyBindingImportServiceV1::import_batch(), not this instance.
-		$legacy_binding_import_client  = new InProcessLegacyBindingImportClient();
-		$legacy_binding_import_service = new LegacyBindingImportService(
-			$legacy_migration_map,
-			$legacy_binding_import_client,
-			$quiescence
-		);
-
-		( new LegacyBindCommand(
-			$legacy_binding_import_service,
-			$legacy_migration_map,
-			$quiescence
-		) )->register();
+		// The SC-M03 legacy-migration / final-cutover engine (legacy export,
+		// Phase A/Phase B migration, quiescence, binding preparation, cutover
+		// handoff) and its `wp universal-support-chat legacy-migrate` /
+		// `legacy-bind` WP-CLI commands were RETIRED here (ADR-0013):
+		// Universal Telegram ADR-0044 made that plugin transport/adapter-only,
+		// so the machinery can no longer operate. Support Chat remains the
+		// sole conversation system of record; the inbound
+		// `ingest_operator_reply` Contract operation and the ADR-0012
+		// outbound Telegram dispatch path are unaffected and wired above.
 
 		unset( $caps );
 	}
@@ -331,13 +230,6 @@ final class Plugin {
 	}
 
 	/**
-	 * SC-M03 work packages 3-4 conversation-level legacy migration map (tests/diagnostics).
-	 */
-	public function legacy_migration_map(): ?LegacyMigrationMapRepository {
-		return $this->legacy_migration_map;
-	}
-
-	/**
 	 * ADR-0012 automatic Telegram dispatch worker (tests/diagnostics).
 	 */
 	public function telegram_dispatch_service(): ?TelegramDispatchService {
@@ -349,26 +241,5 @@ final class Plugin {
 	 */
 	public function telegram_dispatch_outbox(): ?DispatchOutboxRepository {
 		return $this->telegram_dispatch_outbox;
-	}
-
-	/**
-	 * SC-M03 work package 3 Phase A preparatory backfill (tests).
-	 */
-	public function phase_a_backfill_service(): ?PhaseABackfillService {
-		return $this->phase_a_backfill_service;
-	}
-
-	/**
-	 * SC-M03 work package 4 Phase B reconciliation/validation (tests).
-	 */
-	public function phase_b_reconciliation_service(): ?PhaseBReconciliationService {
-		return $this->phase_b_reconciliation_service;
-	}
-
-	/**
-	 * SC-M03 work package 4 read-only migration validators (tests).
-	 */
-	public function legacy_migration_validator(): ?LegacyMigrationValidator {
-		return $this->legacy_migration_validator;
 	}
 }

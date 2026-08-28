@@ -20,8 +20,9 @@
 | 0010 | Final cutover handoff contract and cohort activation |
 | 0011 | `channel_case_ref` is the Support Chat conversation UUID (F1 correction to ADR-0010 §4) |
 | 0012 | Automatic Support Chat → Telegram message dispatch (SC-owned outbox) |
+| 0013 | Retirement of the obsolete SC-M03 legacy-migration / final-cutover engine |
 
-The next available number for any future ADR is **0013**.
+The next available number for any future ADR is **0014**.
 
 ## Immutability
 
@@ -56,3 +57,4 @@ Architecture or composition pattern; a security boundary; a persistence model; a
 - [ADR-0010 — Final cutover handoff contract and cohort activation](0010-final-cutover-handoff-contract-and-cohort-activation.md)
 - [ADR-0011 — `channel_case_ref` is the Support Chat conversation UUID (F1 correction to ADR-0010 §4)](0011-cutover-channel-case-ref-is-support-chat-conversation-uuid.md) — Accepted 2026-08-27
 - [ADR-0012 — Automatic Support Chat → Telegram message dispatch (SC-owned outbox)](0012-automatic-support-chat-to-telegram-dispatch.md) — Accepted
+- [ADR-0013 — Retirement of the obsolete SC-M03 legacy-migration / final-cutover engine](0013-retirement-of-obsolete-sc-m03-migration-cutover-engine.md) — Accepted
