@@ -4,8 +4,9 @@
 
 **F1 correction MERGED (Addendum B). Approval A addendum RECORDED / Product Owner accepted
 2026-08-28 (Addendum C). The single authorised Tier 1 re-attempt was EXECUTED 2026-08-28 and
-PASSED (Addendum D) — Addendum C's one-time authorisation is now consumed. Tier 2 (Approval B)
-still awaiting Product Owner, blocked on B1 and B2.**
+PASSED (Addendum D) — Addendum C's one-time authorisation is now consumed. Tier 2 prerequisites
+(B1/B2) are specified and frozen (Addendum E); **Approval B is PROPOSED / unsigned** and Tier 2
+stays blocked on B1 and B2 being provisioned and independently verified.**
 
 Decision items 1, 3, 4, and 5 (Tier 1 scope, incident-evidence rules, Approval-A gate) and item
 7 (F1 identity-correction implementation acceptance — implemented and merged) are recorded.
@@ -338,14 +339,57 @@ authorised; a second Tier 1 attempt, or any change to the immutable baseline SHA
 Product Owner approval recorded here. Tier 2 (Approval B) remains a separate, later Product Owner
 action, blocked on B1 and B2.
 
+## Addendum E — 2026-08-28 — Tier 2 prerequisites specified and frozen (Approval B still PROPOSED / unsigned)
+
+Explicitly labelled addendum. It records that the Tier 2 prerequisite **design** is now frozen;
+no decision item and no earlier text above is edited, and nothing operational is authorised.
+
+The Tier 2 disposable DEV rehearsal prerequisites are specified in
+[Tier 2 prerequisites plan v1 (Support Chat companion)](../plans/sc-m03-final-cutover-tier2-dev-rehearsal-prerequisites-plan-v1.md)
+and its primary in Universal Telegram
+(`docs/plans/sc-m03-final-cutover-tier2-dev-rehearsal-prerequisites-plan-v1.md`). They define,
+**without provisioning anything**:
+
+- **B1** — an isolated full-WordPress rehearsal instance as a separate Docker Compose project
+  (`scm03rehearsal`) that shares no volume, bind mount, network, database, Redis, credential, or
+  web identity with `dev.biopentra.eu` or anything under `/opt/biopentra/dev/*` or
+  `/opt/biopentra/data/*`; its own reverse-proxy vhost + TLS (dedicated subdomain or temporary
+  tunnel); its own `CredentialVault` key; public host listeners unchanged (2222/80/443); UFW and
+  SSH untouched — with a **B1 verification gate** (10 demonstrated-not-asserted checks) signed
+  off by a reviewer who did not build it.
+- **B2** — a dedicated non-production Telegram bot, forum supergroup, and three test topics,
+  owned by the operator's non-production account, token/secret stored only encrypted in the
+  rehearsal database via `CredentialVault`, webhook lifecycle `setWebhook` /`getWebhookInfo`
+  /`deleteWebhook` against the dedicated bot only, ingress authenticated by the
+  `X-Telegram-Bot-Api-Secret-Token` header, and a full revocation/deletion procedure
+  (`deleteWebhook`; `@BotFather` `/revoke` then `/deletebot`; delete the supergroup; destroy the
+  DB volume) — with a **B2 verification gate** signed off by an independent reviewer.
+- The **Tier 2 operator sequence** — Runs 1–3 of runbook v2 §7 executed once, end-to-end, on the
+  isolated instance, exercising the real paths Tier 1 could not: real WP-Cron / Action Scheduler
+  drain, Redis object cache, authenticated Telegram webhook ingress, real `forum_topic_closed` /
+  `forum_topic_deleted` service messages, a real outbound `sendMessage` to the test supergroup,
+  and a real front-end `409 quiescence_active`.
+- A **proposed, unsigned Approval B** text authorizing **exactly one** Tier 2 rehearsal, at the
+  immutable execution baselines, only after B1 and B2 are provisioned **and independently
+  verified**.
+
+**Four-phase separation:** (1) documentation/planning — this addendum; (2) prerequisite
+provisioning — a separate later task, not authorised here; (3) Approval B recording — the Product
+Owner, not done here; (4) one-time Tier 2 execution — blocked on phases 2 and 3.
+
+**Approval B is not signed and not recorded.** No infrastructure, Telegram resource, DNS, TLS,
+DEV, production, or Tier 2 action has been performed. Tier 2 remains blocked on B1 and B2.
+
 ## Non-authorization
 
 Apart from the F1 implementation acceptance recorded under decision item 7 (implementation of the
 frozen F1 remediation work packages — merged) and the Approval A addendum recorded under Addendum
 C (**exactly one (1)** disposable Tier 1 re-attempt at the immutable baselines — executed and
-passed 2026-08-28, Addendum D), this record authorizes nothing operational. Tier 2 remains
-unexecuted and blocked on B1 and B2; Approval B (Tier 2) and any second Tier 1 attempt remain
-separate, later Product Owner actions.
+passed 2026-08-28, Addendum D), and apart from freezing the Tier 2 prerequisite design under
+Addendum E (which provisions nothing and authorizes nothing), this record authorizes nothing
+operational. Tier 2 remains unexecuted and blocked on B1 and B2; Approval B (Tier 2) is proposed
+and unsigned; any second Tier 1 attempt and any Tier 2 activity remain separate, later Product
+Owner actions.
 
 ## Affected documents
 
@@ -356,6 +400,7 @@ separate, later Product Owner actions.
 - [Tier 1 closure](../closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md) — the halted first attempt / finding of record.
 - [Tier 1 re-attempt closure](../closure/sc-m03-final-cutover-dev-rehearsal-tier1-reattempt-closure.md) — the single authorised re-attempt, executed and passed 2026-08-28.
 - [Support Chat companion rehearsal plan v1](../plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md) (superseded) and [companion v2](../plans/sc-m03-final-cutover-dev-rehearsal-plan-v2.md) (current).
+- [Tier 2 prerequisites plan v1 (Support Chat companion)](../plans/sc-m03-final-cutover-tier2-dev-rehearsal-prerequisites-plan-v1.md) — Addendum E; primary in Universal Telegram; Approval B proposed/unsigned.
 - [F1 implementation closure (Support Chat)](../closure/sc-m03-final-cutover-f1-identity-correction-implementation-closure.md).
 - Primary operator runbook (Universal Telegram) — v1 `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md` (superseded); **v2** `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v2.md` (current); Approval A addendum (**recorded 2026-08-28**) `https://github.com/magpern/universal-telegram/blob/main/docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md`.
 - [SC-M03 charter](../milestones/sc-m03-controlled-migration-and-cutover.md) §0d — planning-only cross-reference added.
