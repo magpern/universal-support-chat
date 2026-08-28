@@ -2,16 +2,17 @@
 
 ## Status
 
-**F1 correction MERGED (see Addendum B). Tier 1 halted attempt stands — a re-attempt needs the
-proposed Approval A addendum under runbook v2. Tier 2 (Approval B) still awaiting Product Owner,
+**F1 correction MERGED (Addendum B). Approval A addendum RECORDED / Product Owner accepted
+2026-08-28 (Addendum C) — authorizes exactly one (1) Tier 1 re-attempt at the two immutable
+execution baseline SHAs and nothing else. Tier 2 (Approval B) still awaiting Product Owner,
 blocked on B1 and B2.**
 
 Decision items 1, 3, 4, and 5 (Tier 1 scope, incident-evidence rules, Approval-A gate) and item
-7 (F1 identity-correction implementation acceptance — now implemented and merged) are recorded.
+7 (F1 identity-correction implementation acceptance — implemented and merged) are recorded.
 Decision items 2 and 6 (Tier 2 / Approval B) remain pending; Tier 2 stays blocked on B1 and B2.
 The original Approval A was consumed by the halted 2026-08-27 Tier 1 attempt; **Addendum B**
-below carries the F1-merge status, DEV rehearsal runbook v2, and the **proposed, unsigned**
-Approval A addendum for a Tier 1 re-attempt.
+below carries the F1-merge status, DEV rehearsal runbook v2, and the Approval A addendum text;
+**Addendum C** records the Product Owner's 2026-08-28 acceptance of that addendum verbatim.
 
 **2026-08-27 — Tier 1 attempted and halted by finding F1.** See decision item 7 below and
 `docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md`. F1 resolution was proposed in
@@ -260,15 +261,58 @@ awaiting Product Owner signature):
 >
 > Signed: __________________________  Date: __________
 
-**This addendum records nothing as accepted.** The Approval A addendum is Proposed and unsigned.
+**Addendum B itself recorded nothing as accepted** — the text above is the addendum "as
+proposed", retained verbatim for decision history. Its Product Owner acceptance is recorded in
+**Addendum C** below.
+
+## Addendum C — 2026-08-28 — Approval A addendum RECORDED (Product Owner accepted)
+
+Explicitly labelled addendum. It records the Product Owner's acceptance; no decision item and no
+earlier text above is edited.
+
+**On 2026-08-28 the Product Owner accepted the Approval A addendum verbatim** (the "as proposed"
+text in Addendum B and in the Universal Telegram record
+`docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md`). The acceptance is
+recorded there, verbatim, under "Product Owner acceptance — recorded 2026-08-28", per the
+acceptance-record convention used for decision item 7 (F1 implementation).
+
+This acceptance:
+
+- **authorizes exactly one (1) Tier 1 re-attempt** of the SC-M03 final-cutover disposable
+  automated operational-sequence / integration validation (Runs 1, 2, and 3 of DEV rehearsal
+  runbook v2 §7), at the **immutable execution baseline SHAs** universal-telegram
+  `6eed0228286e84b4e56e0119f242b483f138a58e` and universal-support-chat
+  `4f833c3344c3cff2adcc0227f93832c0c3a4427a` — operators fetch origin, verify these exact commits
+  exist, and check them out before execution;
+- runs **only** in the disposable `docker/docker-compose.yml` + `docker/docker-compose.interop.yml`
+  container/PHPUnit interop harness (`docker compose … down -v` before and after every run,
+  including the ephemeral Docker containers, networks, and named volumes that harness creates
+  intrinsically for fresh synthetic test databases and harness services), with entirely synthetic
+  fixtures and **zero Telegram network traffic**, on both supported WP/PHP variants;
+- does **not** authorize Tier 2 or any disposable DEV rehearsal; any DEV VPS action or action
+  against `/opt/biopentra/dev/*` or `dev.biopentra.eu`; any Telegram network traffic, bot token,
+  webhook, group, or topic; any production activity; any operational cutover action — no
+  quiescence window, migration, binding preparation, cohort activation, deferred-update replay
+  outside the disposable harness, route switch, cutover, soak, deployment, release, tag,
+  rollback, deletion, or retention change; any incident-row acknowledge / overwrite / repair to
+  force a pass; or any code, test, schema, `universal_support_chat_db_version`, plugin-version,
+  configuration, CI-workflow, or immutable-baseline-SHA change;
+- leaves **Approval B (Tier 2)** a separate, later Product Owner action, blocked on B1 and B2.
+
+**A second Tier 1 attempt, or any change to the immutable baseline SHAs, requires a new Product
+Owner approval recorded here.** No rehearsal has run.
+
+**Next authorised step: execute the single disposable Tier 1 re-attempt only** (Universal
+Telegram record §"Next authorised step").
 
 ## Non-authorization
 
-Apart from the F1 implementation acceptance recorded under decision item 7 (which authorizes
-**only** implementation of the frozen F1 remediation work packages — now merged), this record
-authorizes nothing operational. No rehearsal has run under v1 or v2. Tier 1 remains halted and
-unexecuted; Tier 2 remains unexecuted and blocked on B1 and B2. The Approval A addendum (Tier 1
-re-attempt under v2) and Approval B (Tier 2) remain separate, later Product Owner actions.
+Apart from the F1 implementation acceptance recorded under decision item 7 (implementation of the
+frozen F1 remediation work packages — merged) and the Approval A addendum recorded under Addendum
+C (**exactly one (1)** disposable Tier 1 re-attempt at the immutable baselines), this record
+authorizes nothing operational. No rehearsal has run under v1 or v2. Tier 2 remains unexecuted
+and blocked on B1 and B2; Approval B (Tier 2) and any second Tier 1 attempt remain separate,
+later Product Owner actions.
 
 ## Affected documents
 
@@ -279,7 +323,7 @@ re-attempt under v2) and Approval B (Tier 2) remain separate, later Product Owne
 - [Tier 1 closure](../closure/sc-m03-final-cutover-dev-rehearsal-tier1-closure.md) — the finding of record.
 - [Support Chat companion rehearsal plan v1](../plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md) (superseded) and [companion v2](../plans/sc-m03-final-cutover-dev-rehearsal-plan-v2.md) (current).
 - [F1 implementation closure (Support Chat)](../closure/sc-m03-final-cutover-f1-identity-correction-implementation-closure.md).
-- Primary operator runbook (Universal Telegram) — v1 `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md` (superseded); **v2** `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v2.md` (current); proposed Approval A addendum `https://github.com/magpern/universal-telegram/blob/main/docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md`.
+- Primary operator runbook (Universal Telegram) — v1 `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v1.md` (superseded); **v2** `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v2.md` (current); Approval A addendum (**recorded 2026-08-28**) `https://github.com/magpern/universal-telegram/blob/main/docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md`.
 - [SC-M03 charter](../milestones/sc-m03-controlled-migration-and-cutover.md) §0d — planning-only cross-reference added.
 
 ## Compatibility / Migration impact
