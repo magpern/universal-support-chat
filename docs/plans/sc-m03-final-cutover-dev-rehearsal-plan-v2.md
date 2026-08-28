@@ -1,9 +1,11 @@
 # SC-M03 Final-Cutover — Disposable DEV Rehearsal Plan v2 (Support Chat companion)
 
-**Status: planning-only. No rehearsal has run under this runbook. Product Owner execution
-approval (the Approval A addendum) is outstanding.** This document authorizes nothing and changes
-no code, schema, plugin version, `universal_support_chat_db_version`, configuration, test, tag,
-release, deployment, or infrastructure.
+**Status: planning-only. No rehearsal has run under this runbook.** This document authorizes
+nothing and changes no code, schema, plugin version, `universal_support_chat_db_version`,
+configuration, test, tag, release, deployment, or infrastructure. The **Approval A addendum is
+RECORDED / Product Owner accepted 2026-08-28** and authorizes **exactly one (1)** disposable
+Tier 1 re-attempt at the two immutable execution baseline SHAs; Approval B (Tier 2) is still
+outstanding and blocked on B1 + B2.
 
 **Primary runbook:** `https://github.com/magpern/universal-telegram/blob/main/docs/plans/sc-m03-final-cutover-dev-rehearsal-plan-v2.md`
 (Universal Telegram owns the cutover and quiescence CLI and the operative runbook).
@@ -63,11 +65,13 @@ universal-telegram `7d4cc4f`) — no code, schema, `db_version`, test, configura
 runtime change occurred after F1, only documentation. **Future documentation merges must not
 alter this authorised execution baseline unless a new Product Owner approval is recorded.**
 
-**F1 is no longer a code blocker.** A Tier 1 re-attempt requires a **separate Approval A
+**F1 is no longer a code blocker.** The Tier 1 re-attempt is gated on a **separate Approval A
 addendum** (Universal Telegram
-[`docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md`](https://github.com/magpern/universal-telegram/blob/main/docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md),
-**proposed, unsigned**; verbatim text also in this repository's decision record, "Addendum B").
-Tier 2 remains blocked on B1 and B2.
+[`docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md`](https://github.com/magpern/universal-telegram/blob/main/docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md);
+verbatim text and its acceptance also in this repository's decision record, "Addendum B" /
+"Addendum C"). **That addendum is RECORDED / Product Owner accepted 2026-08-28: it authorizes
+exactly one (1) Tier 1 re-attempt at the two immutable execution baseline SHAs and nothing else.**
+Tier 2 remains blocked on B1 and B2 and pending Approval B.
 
 ## 1. Charter, ADRs, and pinned baselines (revised)
 
@@ -90,7 +94,7 @@ recorded):
 
 | Tier | What it is | Status under v2 |
 |---|---|---|
-| **Tier 1** | A required disposable automated operational-sequence / integration validation in the container/PHPUnit interop harness (`docker/docker-compose.yml` + `docker/docker-compose.interop.yml`, `down -v` before and after), zero Telegram traffic. Proves data effects, state-machine sequencing, CLI-equivalent service ordering of Runs 1, 2, 3. | **Required prerequisite. Unexecuted under v2.** F1 no longer blocks it; the proposed Approval A addendum is required before re-attempt. |
+| **Tier 1** | A required disposable automated operational-sequence / integration validation in the container/PHPUnit interop harness (`docker/docker-compose.yml` + `docker/docker-compose.interop.yml`, `down -v` before and after), zero Telegram traffic. Proves data effects, state-machine sequencing, CLI-equivalent service ordering of Runs 1, 2, 3. | **Required prerequisite. Unexecuted under v2.** The Approval A addendum is **RECORDED (2026-08-28)** and authorizes **exactly one (1)** Tier 1 re-attempt at the two immutable execution baseline SHAs. |
 | **Tier 2** | The first actual disposable DEV rehearsal: an isolated full-WordPress instance plus a dedicated non-production Telegram bot + test supergroup + test topics. | **Required. Blocked on B1 and B2.** |
 
 **Tier 1 does NOT satisfy the accepted requirement for a disposable DEV rehearsal.** B1 and B2
@@ -210,7 +214,7 @@ inherits them unchanged. **Nothing in this repository authorizes execution of ei
 | **B2** | No dedicated non-production Telegram bot / test supergroup / test topics. | Execution of the DEV rehearsal (Tier 2). | Open. |
 | **B3** | `cutover begin` and `cutover activate` have no dry-run. | Confidence that they can be "previewed." | Documented limitation. |
 | **B4** | Assumption A3 unresolved. | Trusting `begin` alone as the migration-evidence gate; §5.3 compensates. | Compensated. |
-| **B5 (governance)** | Product Owner has not approved executing any rehearsal under v2. | The entire rehearsal (both tiers). | Open — Approval A addendum proposed/unsigned; Approval B unchanged. |
+| **B5 (governance)** | Product Owner authorization to execute the rehearsal under v2. | Tier 2; Tier 1 is now cleared for exactly one re-attempt. | **Tier 1: CLEARED** — Approval A addendum recorded 2026-08-28 (decision record Addendum C), one (1) re-attempt at the immutable baselines. **Tier 2: still open** — Approval B unchanged, blocked on B1 + B2. |
 | ~~**F1**~~ | ~~The cutover deferred-update handoff cannot resolve a real prepared binding.~~ | ~~Tier 1 and Tier 2.~~ | **CLEARED 2026-08-27** — corrected and merged in both repositories; verified green by the real dual-plugin interop suite on both WP/PHP variants. A new pre-`begin` gate (A9) asserts the real-cohort handoff resolves in the disposable env before Tier 1 proceeds. |
 
 ## 7. Success criteria (Support Chat side; full list in the primary runbook §9)
@@ -241,21 +245,24 @@ deferred-update replay, Telegram webhook, or operational command against `dev.bi
 production; creation of any infrastructure — a DEV VPS instance, WordPress site, Redis service,
 SWAG configuration, DNS record, TLS certificate, Telegram bot / group / topic, credential, or
 host-level persistent service — or any schema, plugin-version, `universal_support_chat_db_version`,
-configuration, test, CI-workflow, tag, release, or deployment change. (Once the Approval A
-addendum is signed, a Tier 1 re-attempt may bring up only the ephemeral Docker containers,
-networks, and named volumes the disposable `docker/docker-compose.yml` + `docker-compose.interop.yml`
-harness creates intrinsically for fresh synthetic test databases and harness services, torn down
-by `docker compose … down -v` after every run — nothing else.) Separate Product Owner approval —
-the Approval A addendum, then Approval B — is required before the DEV rehearsal, even the Tier 1
-prerequisite, may be executed under this runbook.
+configuration, test, CI-workflow, tag, release, or deployment change. Under the recorded Approval
+A addendum (2026-08-28), the single authorised Tier 1 re-attempt may bring up only the ephemeral
+Docker containers, networks, and named volumes the disposable `docker/docker-compose.yml` +
+`docker-compose.interop.yml` harness creates intrinsically for fresh synthetic test databases and
+harness services, torn down by `docker compose … down -v` after every run — nothing else.
+Approval B (Tier 2) remains a separate, later Product Owner approval, blocked on B1 + B2; a
+second Tier 1 attempt needs a new Product Owner approval.
 
 ## 9. Definition of done (documentation stage only)
 
-- This companion v2 and the decision-record addendum ("Addendum B") are committed on a
-  documentation-only branch, reviewed, CI-green (including the `docs` job), and merged, after the
-  Universal Telegram primary runbook v2 is merged.
+- This companion v2 and the decision-record addenda ("Addendum B", "Addendum C") are committed on
+  documentation-only branches, reviewed, CI-green (including the `docs` job), and merged, after
+  the Universal Telegram primary runbook v2 / addendum record are merged.
 - v1 is left unedited; its "Amendment A" footer already points here.
 - Registries, the plan index, the decisions index, and the milestone §0d page are updated
-  **planning-only** — every touched line states that no rehearsal has run under v2 and Product
-  Owner execution approval (the Approval A addendum) is outstanding.
-- **No acceptance record is added.** The Approval A addendum is Proposed and unsigned.
+  **planning-only**.
+- At the v2-freeze stage no acceptance record was added. **Subsequently, on 2026-08-28, the
+  Product Owner accepted the Approval A addendum verbatim** (decision record Addendum C; Universal
+  Telegram `docs/closure/sc-m03-final-cutover-dev-rehearsal-tier1-approval-addendum.md`) — it
+  authorizes exactly one (1) Tier 1 re-attempt at the two immutable execution baseline SHAs and
+  nothing else. No rehearsal has run.
