@@ -34,3 +34,14 @@ Deliver professional launcher and greeting presentation.
 ## Frozen plan
 
 [sc-m05-professional-widget-experience-plan-v1.md](../plans/sc-m05-professional-widget-experience-plan-v1.md)
+
+## Planning note (ADR-0015)
+
+[ADR-0015](../adr/0015-operator-settings-page-and-diagnostics-separation.md) (Proposed) and
+its plan [sc-operator-settings-and-diagnostics-plan-v1.md](../plans/sc-operator-settings-and-diagnostics-plan-v1.md)
+add a real operator-facing **Support Chat Settings** page for configuration the plugin
+already owns (widget enable/disable, Telegram mirror enable/disable, conversation retention
+periods, uninstall data-removal). That work adds **no** greeting/title/avatar/launcher
+configuration — R3's presentation settings remain SC-M05 scope — but SC-M05's "greeting
+configuration in Hub/settings" now has an established Settings-page home to extend rather
+than create.
