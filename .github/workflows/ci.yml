@@ -86,7 +86,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: magpern/universal-telegram
-          ref: 8d8913ec61ad8052be1c293d7e746274e01d822d
+          ref: 4b7c1a5a9fbb81bd39e03313a3faa68108892689
           path: universal-telegram-sibling
       - name: Install dependencies
         run: bin/docker/composer.sh install --no-interaction
