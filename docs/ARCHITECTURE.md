@@ -20,7 +20,7 @@ See [ADR-0002](adr/0002-plugin-identity-and-ownership-boundaries.md).
 | Persistence | `UniversalSupportChat\Persistence` | Implemented (migrator, lock, schema health; `db_version` target 1) |
 | Privacy | `UniversalSupportChat\Privacy` | Implemented (classification, redactor) |
 | Audit | `UniversalSupportChat\Audit` | Implemented (audit logger + repository; audit log table) |
-| Administration | `UniversalSupportChat\Administration` | Implemented (Hub inbox/detail/reply/notes; read-only Diagnostics). [ADR-0015](adr/0015-operator-settings-page-and-diagnostics-separation.md) (Proposed) adds a real operator **Settings** page and reparents Conversations / Settings / Diagnostics as submenus of the top-level `Support Chat` menu. |
+| Administration | `UniversalSupportChat\Administration` | Implemented ([ADR-0015](adr/0015-operator-settings-page-and-diagnostics-separation.md)): the top-level `Support Chat` menu owns three submenus — **Conversations** (Hub inbox/detail/reply/notes), **Settings** (`SupportChatSettingsPage`; Settings API over the existing option group, `MANAGE`-gated, the six existing keys only), and **Diagnostics** (`DiagnosticsPage`; read-only version/schema/vault/audit plus safe Telegram dispatch/pairing/outbox aggregates). `Administration\Compat\LegacySettingsRedirect` 302-redirects the retired `options-general.php?page=universal-support-chat` URL to Diagnostics for `MANAGE` users. No new top-level menu, option, schema, or capability. |
 | Conversations | `UniversalSupportChat\Conversations` | Implemented (SC-M01: SoR, visitor REST, retention) |
 | ChatWidget | `UniversalSupportChat\ChatWidget` | Implemented (SC-M02: minimal visitor widget) |
 | Availability | — | Not authorized until SC-M06 |

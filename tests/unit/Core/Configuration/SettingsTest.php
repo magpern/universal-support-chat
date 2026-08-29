@@ -59,4 +59,26 @@ final class SettingsTest extends TestCase {
 		$this->assertSame( 30, $result['conversation_archived_body_days'] );
 		$this->assertSame( 90, $result['conversation_purge_days'] );
 	}
+
+	/**
+	 * ADR-0015 form contract: every checkbox ships a hidden `0` companion, so
+	 * an unchecked box submits `'0'` (not an absent key). `'0'` must sanitise
+	 * to false; an absent key falls back to the default.
+	 */
+	public function test_widget_enabled_hidden_zero_companion_yields_false(): void {
+		$settings = new Settings();
+
+		$this->assertFalse( $settings->sanitize( array( 'widget_enabled' => '0' ) )['widget_enabled'] );
+		$this->assertTrue( $settings->sanitize( array( 'widget_enabled' => '1' ) )['widget_enabled'] );
+		// Key entirely absent (no hidden companion) would fall back to the default.
+		$this->assertTrue( $settings->sanitize( array() )['widget_enabled'] );
+	}
+
+	public function test_remove_data_on_uninstall_is_explicit_and_coerced(): void {
+		$settings = new Settings();
+
+		$this->assertFalse( $settings->sanitize( array() )['remove_data_on_uninstall'] );
+		$this->assertFalse( $settings->sanitize( array( 'remove_data_on_uninstall' => '0' ) )['remove_data_on_uninstall'] );
+		$this->assertTrue( $settings->sanitize( array( 'remove_data_on_uninstall' => '1' ) )['remove_data_on_uninstall'] );
+	}
 }

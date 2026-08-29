@@ -5,9 +5,9 @@
 
 namespace UniversalSupportChat\Tests\Integration\Administration;
 
-use UniversalSupportChat\Administration\Diagnostics\DiagnosticsPage;
 use UniversalSupportChat\Administration\Hub\HubPage;
 use UniversalSupportChat\Administration\PluginActionLinks;
+use UniversalSupportChat\Administration\Settings\SupportChatSettingsPage;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
 use WP_UnitTestCase;
 
@@ -73,14 +73,23 @@ final class PluginActionLinksTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'href="' . esc_url( $expected ) . '"', $result['usc-conversations'] );
 	}
 
-	public function test_settings_link_targets_the_existing_settings_menu_page(): void {
+	public function test_settings_link_targets_the_new_support_chat_settings_page(): void {
 		$this->as_manager();
 
 		$result   = $this->links->add_links( $this->default_links() );
-		$expected = admin_url( 'options-general.php?page=' . DiagnosticsPage::SLUG );
+		$expected = admin_url( 'admin.php?page=' . SupportChatSettingsPage::SLUG );
 
-		$this->assertSame( 'universal-support-chat', DiagnosticsPage::SLUG );
+		$this->assertSame( 'universal-support-chat-settings', SupportChatSettingsPage::SLUG );
 		$this->assertStringContainsString( 'href="' . esc_url( $expected ) . '"', $result['usc-settings'] );
+	}
+
+	public function test_settings_link_no_longer_points_at_the_legacy_options_general_url(): void {
+		$this->as_manager();
+
+		$result = $this->links->add_links( $this->default_links() );
+
+		$this->assertStringNotContainsString( 'options-general.php?page=universal-support-chat', $result['usc-settings'] );
+		$this->assertStringNotContainsString( 'page=universal-support-chat"', $result['usc-settings'] );
 	}
 
 	public function test_links_are_hidden_without_the_manage_capability(): void {
