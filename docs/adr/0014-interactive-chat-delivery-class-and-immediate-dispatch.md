@@ -190,3 +190,89 @@ path.
   SQL; no copied code; no direct Telegram API call from Support Chat.
 - No visitor-facing or operator-facing priority selector; no new settings page; no removal of
   existing diagnostics or alerts.
+
+---
+
+## Amendment 1 — fully asynchronous expedited dispatch (2026-08-29, review correction)
+
+**Status: Accepted.** Supersedes §3 and §4 above and the corresponding parts of §Alternatives,
+§Consequences, and §"Exact exclusions". §1, §2 (`delivery_class` on `deliver_message`), §5
+(loop prevention), and Universal Telegram ADR-0045 are unchanged.
+
+### Why
+
+The original §3 asserted "no synchronous Telegram API dependency for the website response" but
+its reasoning only held for an already-bound conversation. For a **new** conversation the
+in-request routine ran `ensure_channel_case`, whose Universal Telegram handler
+(`EnsureChannelCaseService::ensure()` → `ForumTopicService::create()` →
+`TelegramApiClient::create_forum_topic()`) makes a **synchronous** `createForumTopic` Bot API
+call. A visitor's or operator's HTTP request could therefore block on Telegram network I/O,
+its availability, and its timeout behaviour. That is unacceptable and is removed.
+
+### Corrected invariant
+
+The visitor / Hub request, on the enabled `interactive_chat` path:
+
+1. **may** atomically persist the Support Chat message and the durable, content-free outbox row
+   in one transaction (unchanged);
+2. **may** schedule and non-blockingly kick asynchronous work;
+3. **must never** synchronously cause any Telegram network I/O — not `createForumTopic`, not
+   `notify_operators`, not `deliver_message`, not anything reached through the Contract v1
+   client;
+4. its HTTP response **must not** depend on Universal Telegram / Telegram completion,
+   availability, or timeout behaviour.
+
+There is **no in-request delivery attempt** of any kind. `TelegramDispatchService::attempt_now()`
+and `DispatchOutboxRepository::claim_one()` (introduced by the first draft) are removed.
+
+### The expedited mechanism (asynchronous only)
+
+After the commit, `DispatchEnqueuer` calls one **non-throwing** kick seam
+(`DispatchWorker::request_immediate_run()`):
+
+- ensures a one-off `DispatchWorker::HOOK` event is scheduled for now
+  (`wp_schedule_single_event`), and
+- fires WordPress core's own non-blocking cron loopback (`spawn_cron()` — a `wp_remote_post`
+  with `blocking => false`, `timeout => 0.01`), so the dispatch worker runs in a **separate
+  loopback request** within about a second, even on a `DISABLE_WP_CRON` site, without the
+  originating request waiting for it. `spawn_cron()`'s own `doing_cron` transient lock collapses
+  repeated kicks under load.
+
+**All** Telegram-facing work — `ensure_channel_case` (including new-conversation
+`createForumTopic`), the `created`-only `notify_operators`, and `deliver_message` with
+`delivery_class = interactive_chat` — happens **only** in that asynchronous worker
+(`TelegramDispatchService::dispatch_due()` via `DispatchWorker::run()`), exactly as it does on
+the ordinary recurring sweep, with the unchanged lease / reclaim / capped-backoff retry and the
+message-UUID idempotency key. A new conversation converges the same way an existing binding
+does: the worker creates the topic + binding, then delivers.
+
+An **existing bound** conversation gets its expedited treatment purely from (a) the immediate
+async kick making the worker run promptly and (b) `delivery_class = interactive_chat` placing
+its `deliver_message` job ahead of `standard` work in Universal Telegram's queue (ADR-0045) —
+never from any work done in the originating request.
+
+### Exception containment
+
+The kick seam is non-throwing across its **entire** public boundary — scheduling, the
+`spawn_cron()` loopback, and any audit write are each wrapped so that a failure of the
+asynchronous scheduling / dispatch infrastructure:
+
+- leaves the already-committed message and outbox row fully intact and recoverable (the
+  recurring 60 s safety-net sweep still delivers them), and
+- does **not** alter the successful visitor / Hub message response.
+
+Pre-commit failures (message write, outbox write) still roll back the transaction and surface as
+the caller's ordinary retryable error, with nothing committed — unchanged.
+
+### Latency trade-off (revised)
+
+The enabled `interactive_chat` write path adds only: the outbox `INSERT` inside the existing
+message transaction, `wp_schedule_single_event`, and a fire-and-forget `spawn_cron()` loopback
+POST that does not block. No external network call is awaited. Disabled (default) ⇒ no
+transaction, no outbox row, no kick.
+
+### Exclusions (added)
+
+- No synchronous Telegram API call, and no synchronous Contract v1 call that can reach Telegram
+  I/O, from any visitor or Hub request path.
+- No in-request "immediate delivery attempt"; expedited delivery is asynchronous-only.

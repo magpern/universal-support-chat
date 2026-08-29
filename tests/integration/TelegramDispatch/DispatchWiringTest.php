@@ -20,11 +20,11 @@ use UniversalSupportChat\Persistence\MigrationLock;
 use UniversalSupportChat\Persistence\Migrator;
 use UniversalSupportChat\Persistence\SchemaHealth;
 use UniversalSupportChat\Privacy\Redactor;
+use UniversalSupportChat\Conversations\ConversationMessage;
 use UniversalSupportChat\TelegramDispatch\DispatchEnqueuer;
 use UniversalSupportChat\TelegramDispatch\DispatchOutboxRepository;
 use UniversalSupportChat\TelegramDispatch\DispatchRecord;
-use UniversalSupportChat\TelegramDispatch\TelegramDispatchService;
-use UniversalSupportChat\Tests\Integration\TelegramDispatch\Support\RecordingAdapterContractClient;
+use UniversalSupportChat\TelegramDispatch\DispatchWorker;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_UnitTestCase;
@@ -196,91 +196,79 @@ final class DispatchWiringTest extends WP_UnitTestCase {
 		$this->assertSame( array(), $this->outbox->claim_due( 20 ) );
 	}
 
-	// ---- ADR-0014 §3: the bounded immediate attempt ----
+	// ---- ADR-0014 Amendment 1: the request does zero Telegram I/O ----
 
-	private RecordingAdapterContractClient $immediate_client;
+	/**
+	 * @var array<int, string>
+	 */
+	private array $http_urls = array();
 
-	private function enqueuer_with_immediate( ?RecordingAdapterContractClient $client = null ): DispatchEnqueuer {
-		$this->immediate_client = $client ?? new RecordingAdapterContractClient();
-		$service                = new TelegramDispatchService(
-			new Settings(),
-			$this->outbox,
-			$this->messages,
-			$this->immediate_client,
-			new AuditLogger( $this->health, new Redactor() )
+	private function spy_http(): void {
+		$this->http_urls = array();
+		add_filter(
+			'pre_http_request',
+			function ( $pre, $args, $url ) {
+				$this->http_urls[] = (string) $url;
+
+				// Fail every outbound request — the point is that the visitor
+				// request must not depend on any of them.
+				return new \WP_Error( 'blocked_in_test', 'no outbound HTTP in tests' );
+			},
+			10,
+			3
 		);
-		$enqueuer               = new DispatchEnqueuer( new Settings(), $this->outbox );
-		$enqueuer->set_immediate_dispatch( $service );
-
-		return $enqueuer;
 	}
 
-	public function test_immediate_attempt_runs_after_commit_and_delivers_as_interactive_chat(): void {
-		$conversation = $this->open_conversation();
-
-		$response = $this->post_visitor_message( $this->enqueuer_with_immediate(), $conversation, 'Interactive please' );
-		$this->assertTrue( $response->get_data()['ok'] );
-
-		$deliver = $this->immediate_client->calls_for( 'deliver_message' );
-		$this->assertCount( 1, $deliver );
-		$this->assertSame( TelegramDispatchService::DELIVERY_CLASS_INTERACTIVE, $deliver[0]['delivery_class'] );
-
-		// The row committed first, then was delivered in-request.
-		$record = $this->outbox->find( $response->get_data()['message_uuid'] );
-		$this->assertSame( DispatchRecord::STATE_DELIVERED, $record->state() );
+	private function assert_no_telegram_http(): void {
+		foreach ( $this->http_urls as $url ) {
+			$this->assertStringNotContainsString( 'api.telegram.org', $url, 'the visitor / Hub request made a Telegram API call' );
+		}
 	}
 
-	public function test_disabled_dispatch_makes_no_immediate_attempt(): void {
-		update_option( Settings::OPTION_NAME, array( 'telegram_dispatch_enabled' => false ) );
-		$conversation = $this->open_conversation();
+	public function test_visitor_rest_message_makes_no_telegram_http_and_schedules_the_worker(): void {
+		$this->spy_http();
+		wp_unschedule_hook( DispatchWorker::HOOK );
 
-		$response = $this->post_visitor_message( $this->enqueuer_with_immediate(), $conversation, 'no mirror' );
+		$conversation = $this->open_conversation();
+		$response     = $this->post_visitor_message( $this->enqueuer, $conversation, 'no sync telegram please' );
 
 		$this->assertTrue( $response->get_data()['ok'] );
-		$this->assertSame( array(), $this->immediate_client->calls );
+		$this->assertNotNull( $this->messages->find_by_uuid( $response->get_data()['message_uuid'] ) );
+		$this->assertNotNull( $this->outbox->find( $response->get_data()['message_uuid'] ) );
+
+		$this->assert_no_telegram_http();
+		$this->assertNotFalse( wp_next_scheduled( DispatchWorker::HOOK ), 'the async worker run was scheduled' );
 	}
 
-	public function test_visitor_response_is_ok_when_the_immediate_attempt_throws(): void {
-		$throwing     = new class() extends RecordingAdapterContractClient {
-			public function ensure_channel_case( string $peer_id, string $conversation_uuid, string $reason_code, array $summary_meta = array() ): array {
-				throw new \RuntimeException( 'adapter exploded' );
-			}
-		};
+	public function test_the_enqueuer_makes_no_contract_or_telegram_call_for_either_direction(): void {
+		$this->spy_http();
+
+		foreach ( array( ConversationMessage::DIRECTION_VISITOR, ConversationMessage::DIRECTION_OPERATOR ) as $direction ) {
+			$conversation = $this->open_conversation();
+			$message      = $this->enqueuer->persist_and_enqueue(
+				$conversation->uuid(),
+				fn (): ?ConversationMessage => $this->messages->create( $conversation->id(), $direction, 'body', 'stored', null )
+			);
+
+			$this->assertInstanceOf( ConversationMessage::class, $message );
+			$this->assertNotNull( $this->outbox->find( $message->uuid() ), "outbox row committed for {$direction}" );
+			$this->assertSame( DispatchRecord::STATE_PENDING, $this->outbox->find( $message->uuid() )->state() );
+		}
+
+		$this->assert_no_telegram_http();
+	}
+
+	public function test_commit_and_response_survive_a_broken_async_kick(): void {
+		// Make WP-Cron scheduling itself refuse.
+		add_filter( 'schedule_event', '__return_false' );
+		add_filter( 'pre_http_request', static fn () => new \WP_Error( 'down', 'infra down' ), 10, 3 );
+
 		$conversation = $this->open_conversation();
+		$response     = $this->post_visitor_message( $this->enqueuer, $conversation, 'kick is broken but I still commit' );
 
-		$response = $this->post_visitor_message( $this->enqueuer_with_immediate( $throwing ), $conversation, 'still fine' );
-
-		$this->assertTrue( $response->get_data()['ok'], 'the website response never fails on an immediate-attempt error' );
-		$this->assertNotEmpty( $response->get_data()['message_uuid'] );
-
-		// The committed message + outbox row survive and are retryable.
+		$this->assertTrue( $response->get_data()['ok'], 'a broken async kick never fails the visitor response' );
 		$record = $this->outbox->find( $response->get_data()['message_uuid'] );
 		$this->assertNotNull( $record );
-		$this->assertSame( DispatchRecord::STATE_FAILED, $record->state() );
-	}
-
-	public function test_telegram_originated_reply_triggers_no_immediate_attempt(): void {
-		$conversation = $this->open_conversation();
-		$enqueuer     = $this->enqueuer_with_immediate();
-
-		$dispatcher = new ContractOperationDispatcher(
-			$this->conversations,
-			$this->messages,
-			new ChannelStatusRepository( $this->health ),
-			new AuditLogger( $this->health, new Redactor() ),
-			$enqueuer
-		);
-
-		$dispatcher->dispatch(
-			'ingest_operator_reply',
-			'universal-telegram',
-			array(
-				'channel_case_ref' => $conversation->uuid(),
-				'body'             => 'from telegram',
-				'idempotency_key'  => wp_generate_uuid4(),
-			)
-		);
-
-		$this->assertSame( array(), $this->immediate_client->calls );
+		$this->assertSame( DispatchRecord::STATE_PENDING, $record->state(), 'the committed outbox row is intact and recoverable by the recurring sweep' );
 	}
 }

@@ -83,6 +83,36 @@ final class DispatchWorker {
 	}
 
 	/**
+	 * ADR-0014 Amendment 1: the visitor / Hub request's only expedite step.
+	 * Schedules a one-off run for now, then fires WordPress core's own
+	 * non-blocking cron loopback (`spawn_cron()` — a `wp_remote_post` with
+	 * `blocking => false`, `timeout => 0.01`) so the dispatch worker runs
+	 * in a **separate** request within about a second, even on a
+	 * `DISABLE_WP_CRON` site, without the originating request waiting for
+	 * it. `spawn_cron()`'s `doing_cron` transient lock collapses repeated
+	 * kicks under load.
+	 *
+	 * **Non-throwing across its entire boundary.** A failure of the
+	 * scheduling or loopback infrastructure must never touch the caller's
+	 * already-committed message / outbox row or its response — the
+	 * recurring 60 s safety-net sweep still delivers the row.
+	 */
+	public static function request_immediate_run(): void {
+		try {
+			if ( ! wp_next_scheduled( self::HOOK ) ) {
+				wp_schedule_single_event( time(), self::HOOK );
+			}
+
+			if ( function_exists( 'spawn_cron' ) ) {
+				spawn_cron();
+			}
+		} catch ( \Throwable $exception ) {
+			// Swallowed by design — see the docblock.
+			unset( $exception );
+		}
+	}
+
+	/**
 	 * Unschedules the recurring sweep (deactivation / uninstall).
 	 */
 	public static function unschedule(): void {

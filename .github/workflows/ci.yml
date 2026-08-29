@@ -77,7 +77,7 @@ jobs:
     steps:
       - name: Checkout universal-support-chat
         uses: actions/checkout@v7
-      # Pinned to the Universal Telegram ADR-0045 implementation branch head
+      # Pinned to the Universal Telegram ADR-0045 implementation branch head (incl. Amendment 1)
       # (interactive-priority transport — the counterpart this SC feature
       # needs). MUST be re-pinned to Universal Telegram `main` once
       # `feature/ut-interactive-chat-delivery-priority` merges. Never a
@@ -86,7 +86,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: magpern/universal-telegram
-          ref: 6ef24f6798914036ce7101f71b62fb5d1e1d2f07
+          ref: 15d96054ca8005e7b1cc3cac0fba6d7ca4c5e604
           path: universal-telegram-sibling
       - name: Install dependencies
         run: bin/docker/composer.sh install --no-interaction

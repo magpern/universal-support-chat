@@ -34,41 +34,15 @@ use UniversalSupportChat\Core\Configuration\Settings;
 final class DispatchEnqueuer {
 
 	/**
-	 * ADR-0014 §3: the bounded immediate dispatch attempt, run after the
-	 * atomic message + outbox commit. Optional and set-once via
-	 * {@see set_immediate_dispatch()} because the composition root builds
-	 * the service after this enqueuer; `null` ⇒ only the unchanged WP-Cron
-	 * worker delivers (the pre-ADR-0014 behaviour).
-	 *
-	 * @var TelegramDispatchService|null
-	 */
-	private ?TelegramDispatchService $immediate = null;
-
-	/**
 	 * Constructor.
 	 *
-	 * @param Settings                    $settings  Plugin settings.
-	 * @param DispatchOutboxRepository    $outbox    Dispatch outbox.
-	 * @param TelegramDispatchService|null $immediate Optional bounded immediate-attempt service (ADR-0014 §3).
+	 * @param Settings                 $settings Plugin settings.
+	 * @param DispatchOutboxRepository $outbox   Dispatch outbox.
 	 */
 	public function __construct(
 		private readonly Settings $settings,
-		private readonly DispatchOutboxRepository $outbox,
-		?TelegramDispatchService $immediate = null
-	) {
-		$this->immediate = $immediate;
-	}
-
-	/**
-	 * Wires the bounded immediate-attempt service (ADR-0014 §3). Called
-	 * once by the composition root; harmless to omit — the WP-Cron worker
-	 * still delivers every committed row.
-	 *
-	 * @param TelegramDispatchService $immediate Immediate-attempt service.
-	 */
-	public function set_immediate_dispatch( TelegramDispatchService $immediate ): void {
-		$this->immediate = $immediate;
-	}
+		private readonly DispatchOutboxRepository $outbox
+	) {}
 
 	/**
 	 * Whether automatic Telegram dispatch is enabled.
@@ -147,14 +121,12 @@ final class DispatchEnqueuer {
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- transaction control statement.
 		$wpdb->query( 'COMMIT' );
 
-		if ( null !== $this->immediate && $this->is_mirrored_direction( $message->direction() ) ) {
-			// ADR-0014 §3: one bounded, best-effort immediate attempt AFTER
-			// the commit. Never throws; a failure just leaves the row for
-			// the worker (kicked below).
-			$this->immediate->attempt_now( $message->uuid() );
+		if ( $this->is_mirrored_direction( $message->direction() ) ) {
+			// ADR-0014 Amendment 1: the ONLY expedite step in the request —
+			// a non-blocking, non-throwing async kick. No Telegram I/O, no
+			// Contract call, no dependence on Universal Telegram here.
+			DispatchWorker::request_immediate_run();
 		}
-
-		$this->kick();
 
 		return $message;
 	}
@@ -188,14 +160,5 @@ final class DispatchEnqueuer {
 			array( ConversationMessage::DIRECTION_VISITOR, ConversationMessage::DIRECTION_OPERATOR ),
 			true
 		);
-	}
-
-	/**
-	 * Schedules an immediate one-off worker run. WP-Cron collapses
-	 * identical hook+args events within a 10-minute window, so repeated
-	 * kicks under load do not pile up.
-	 */
-	private function kick(): void {
-		wp_schedule_single_event( time(), DispatchWorker::HOOK );
 	}
 }

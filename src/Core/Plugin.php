@@ -183,11 +183,11 @@ final class Plugin {
 			$audit
 		);
 
-		// ADR-0014 §3: the visitor REST path and the Hub reply path make one
-		// bounded, best-effort immediate dispatch attempt after the atomic
-		// message + outbox commit; the WP-Cron worker below remains the
-		// durable recovery / eventual-delivery path.
-		$dispatch_enqueuer->set_immediate_dispatch( $dispatch_service );
+		// ADR-0014 Amendment 1: the visitor / Hub request only commits the
+		// message + outbox row and fires a non-blocking async kick
+		// (DispatchWorker::request_immediate_run). ALL Telegram-facing work —
+		// topic creation, notify, delivery with delivery_class=interactive_chat
+		// — happens only in this WP-Cron worker.
 
 		( new DiagnosticsPage( $schema_health, $audit_repo, $vault ) )->register();
 		( new PluginActionLinks( UNIVERSAL_SUPPORT_CHAT_PLUGIN_FILE ) )->register();

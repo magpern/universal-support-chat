@@ -241,83 +241,37 @@ final class TelegramDispatchServiceTest extends WP_UnitTestCase {
 		);
 	}
 
-	// ---- ADR-0014 §3: bounded immediate attempt ----
+	// ---- ADR-0014 Amendment 1: delivery is worker-only, class is interactive_chat ----
 
-	public function test_attempt_now_is_a_no_op_when_dispatch_is_disabled(): void {
-		update_option( Settings::OPTION_NAME, array( 'telegram_dispatch_enabled' => false ) );
-		$message = $this->seed_message( ConversationMessage::DIRECTION_VISITOR, 'hi' );
-		$this->outbox->enqueue( $message->uuid(), 4242, wp_generate_uuid4(), 'visitor' );
-
-		$this->service()->attempt_now( $message->uuid() );
-
-		$this->assertSame( array(), $this->client->calls );
-		$this->assertSame( DispatchRecord::STATE_PENDING, $this->outbox->find( $message->uuid() )->state() );
-	}
-
-	public function test_attempt_now_delivers_a_committed_row_as_interactive_chat(): void {
+	public function test_worker_delivers_with_delivery_class_interactive_chat(): void {
 		$message = $this->seed_message( ConversationMessage::DIRECTION_VISITOR, 'Where is my order?' );
 		$this->outbox->enqueue( $message->uuid(), 4242, wp_generate_uuid4(), 'visitor' );
 
-		$this->service()->attempt_now( $message->uuid() );
+		$this->service()->dispatch_due( 10 );
 
 		$deliver = $this->client->calls_for( 'deliver_message' );
 		$this->assertCount( 1, $deliver );
 		$this->assertSame( TelegramDispatchService::DELIVERY_CLASS_INTERACTIVE, $deliver[0]['delivery_class'] );
-		$this->assertSame( $message->uuid(), $deliver[0]['message_uuid'] );
 		$this->assertSame( DispatchRecord::STATE_DELIVERED, $this->outbox->find( $message->uuid() )->state() );
 	}
 
-	public function test_a_thrown_transport_error_leaves_the_row_retryable_and_never_propagates(): void {
-		$throwing = new class() extends RecordingAdapterContractClient {
-			public function deliver_message( string $peer_id, string $channel_case_ref, string $message_uuid, string $body, string $attribution = '', string $delivery_class = self::DELIVERY_CLASS_STANDARD ): array {
-				throw new \RuntimeException( 'transport blew up' );
-			}
-		};
-		$service  = new TelegramDispatchService( new Settings(), $this->outbox, $this->messages, $throwing, new AuditLogger( new SchemaHealth(), new Redactor() ) );
-
-		$message = $this->seed_message( ConversationMessage::DIRECTION_VISITOR, 'boom' );
+	public function test_new_conversation_topic_creation_and_delivery_happen_in_the_worker_and_converge(): void {
+		$this->client->ensure_result['case_status'] = 'created';
+		$message                                    = $this->seed_message( ConversationMessage::DIRECTION_VISITOR, 'first contact' );
 		$this->outbox->enqueue( $message->uuid(), 4242, wp_generate_uuid4(), 'visitor' );
 
-		$service->attempt_now( $message->uuid() );
-
-		$record = $this->outbox->find( $message->uuid() );
-		$this->assertSame( DispatchRecord::STATE_FAILED, $record->state() );
-		$this->assertSame( 'immediate_attempt_error', $record->last_reason() );
-		$this->assertGreaterThan( gmdate( 'Y-m-d H:i:s' ), $record->next_attempt_at() );
-	}
-
-	public function test_an_unavailable_adapter_leaves_the_row_retryable(): void {
-		$this->client->ensure_result = array(
-			'ok'               => false,
-			'status'           => 503,
-			'reason'           => AdapterContractClient::REASON_NOT_PAIRED,
-			'channel_case_ref' => '',
-			'case_status'      => null,
-		);
-		$message                     = $this->seed_message( ConversationMessage::DIRECTION_VISITOR, 'hello' );
-		$this->outbox->enqueue( $message->uuid(), 4242, wp_generate_uuid4(), 'visitor' );
-
-		$this->service()->attempt_now( $message->uuid() );
-
-		$this->assertSame( array(), $this->client->calls_for( 'deliver_message' ) );
-		$this->assertSame( DispatchRecord::STATE_FAILED, $this->outbox->find( $message->uuid() )->state() );
-	}
-
-	public function test_attempt_now_after_delivered_is_a_no_op_and_the_worker_never_re_delivers(): void {
-		$message = $this->seed_message( ConversationMessage::DIRECTION_VISITOR, 'once' );
-		$this->outbox->enqueue( $message->uuid(), 4242, wp_generate_uuid4(), 'visitor' );
-
-		$this->service()->attempt_now( $message->uuid() );
-		$this->assertCount( 1, $this->client->calls_for( 'deliver_message' ) );
-
-		// A second immediate attempt and a worker sweep must not re-deliver.
-		$this->service()->attempt_now( $message->uuid() );
 		$this->service()->dispatch_due( 10 );
 
+		$this->assertCount( 1, $this->client->calls_for( 'ensure_channel_case' ) );
+		$this->assertCount( 1, $this->client->calls_for( 'notify_operators' ) );
+		$this->assertCount( 1, $this->client->calls_for( 'deliver_message' ) );
+		$this->assertSame( DispatchRecord::STATE_DELIVERED, $this->outbox->find( $message->uuid() )->state() );
+
+		$this->service()->dispatch_due( 10 );
 		$this->assertCount( 1, $this->client->calls_for( 'deliver_message' ) );
 	}
 
-	public function test_worker_converges_a_row_the_immediate_attempt_failed_with_no_duplicate(): void {
+	public function test_worker_converges_after_a_transient_failure_with_no_duplicate(): void {
 		$this->client->ensure_result = array(
 			'ok'               => false,
 			'status'           => 503,
@@ -328,10 +282,10 @@ final class TelegramDispatchServiceTest extends WP_UnitTestCase {
 		$message                     = $this->seed_message( ConversationMessage::DIRECTION_OPERATOR, 'reply' );
 		$this->outbox->enqueue( $message->uuid(), 4242, wp_generate_uuid4(), 'operator' );
 
-		$this->service()->attempt_now( $message->uuid() );
+		$this->service()->dispatch_due( 10 );
 		$this->assertSame( DispatchRecord::STATE_FAILED, $this->outbox->find( $message->uuid() )->state() );
+		$this->assertSame( array(), $this->client->calls_for( 'deliver_message' ) );
 
-		// Transport recovers; the worker delivers exactly once.
 		$this->client->ensure_result = array(
 			'ok'               => true,
 			'status'           => 200,
