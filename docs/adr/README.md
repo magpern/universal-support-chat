@@ -61,4 +61,4 @@ Architecture or composition pattern; a security boundary; a persistence model; a
 - [ADR-0012 — Automatic Support Chat → Telegram message dispatch (SC-owned outbox)](0012-automatic-support-chat-to-telegram-dispatch.md) — Accepted
 - [ADR-0013 — Retirement of the obsolete SC-M03 legacy-migration / final-cutover engine](0013-retirement-of-obsolete-sc-m03-migration-cutover-engine.md) — Accepted
 - [ADR-0014 — Interactive delivery class for Support Chat → Telegram, and a bounded immediate dispatch attempt](0014-interactive-chat-delivery-class-and-immediate-dispatch.md) — Proposed
-- [ADR-0015 — Operator-facing Support Chat Settings page, and separation of read-only Diagnostics](0015-operator-settings-page-and-diagnostics-separation.md) — Proposed
+- [ADR-0015 — Operator-facing Support Chat Settings page, and separation of read-only Diagnostics](0015-operator-settings-page-and-diagnostics-separation.md) — Accepted 2026-08-29

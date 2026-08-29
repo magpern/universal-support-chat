@@ -2,14 +2,18 @@
 
 ## Status
 
-**Proposed** — documentation freeze. Surfaces configuration the plugin **already owns**
-through the WordPress Settings API and reorganises the existing admin surface. **No** new
-option, **no** new capability, **no** schema change (`universal_support_chat_db_version`
-stays at `12`), **no** default change, **no** retention or uninstall semantics change, **no**
-Contract v1 change, **no** Universal Telegram change, **no** message-delivery / queue /
-priority change. No plugin version tag, GitHub Release, DEV change, or production change is
-part of this decision. Implementation is authorized only from the merged freeze baseline, per
-the companion plan `docs/plans/sc-operator-settings-and-diagnostics-plan-v1.md`.
+**Accepted** — 2026-08-29, per Product Owner implementation acceptance
+`docs/decisions/sc-adr-0015-operator-settings-diagnostics-po-acceptance.md`. Documentation
+freeze merged on `main` at `f978ea5e46223215af2e2b27cf48a0facf81f28f` (PR #42). Surfaces
+configuration the plugin **already owns** through the WordPress Settings API and reorganises
+the existing admin surface. **No** new option, **no** new capability, **no** schema change
+(`universal_support_chat_db_version` stays at `12`), **no** default change, **no** retention
+or uninstall semantics change, **no** Contract v1 change, **no** Universal Telegram change,
+**no** message-delivery / queue / priority change. No plugin version tag, GitHub Release, DEV
+change, or production change is part of this decision. Implementation is authorized — from the
+merged freeze baseline, exactly within the frozen scope of this ADR and the companion plan
+`docs/plans/sc-operator-settings-and-diagnostics-plan-v1.md`, by the Product Owner acceptance
+record cited above.
 
 ## Context
 
