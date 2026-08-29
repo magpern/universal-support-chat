@@ -225,9 +225,13 @@ final class DispatchWiringTest extends WP_UnitTestCase {
 		}
 	}
 
-	public function test_visitor_rest_message_makes_no_telegram_http_and_schedules_the_worker(): void {
+	public function test_visitor_rest_message_makes_no_telegram_http_and_schedules_the_immediate_worker(): void {
 		$this->spy_http();
-		wp_unschedule_hook( DispatchWorker::HOOK );
+		wp_clear_scheduled_hook( DispatchWorker::IMMEDIATE_HOOK );
+		// Normal deployed state: the recurring sweep is already scheduled.
+		if ( ! wp_next_scheduled( DispatchWorker::HOOK ) ) {
+			wp_schedule_event( time() + 60, DispatchWorker::SCHEDULE, DispatchWorker::HOOK );
+		}
 
 		$conversation = $this->open_conversation();
 		$response     = $this->post_visitor_message( $this->enqueuer, $conversation, 'no sync telegram please' );
@@ -237,7 +241,10 @@ final class DispatchWiringTest extends WP_UnitTestCase {
 		$this->assertNotNull( $this->outbox->find( $response->get_data()['message_uuid'] ) );
 
 		$this->assert_no_telegram_http();
-		$this->assertNotFalse( wp_next_scheduled( DispatchWorker::HOOK ), 'the async worker run was scheduled' );
+
+		$due = wp_next_scheduled( DispatchWorker::IMMEDIATE_HOOK );
+		$this->assertNotFalse( $due, 'a due immediate worker run was scheduled even though the recurring hook exists' );
+		$this->assertLessThanOrEqual( time(), (int) $due );
 	}
 
 	public function test_the_enqueuer_makes_no_contract_or_telegram_call_for_either_direction(): void {

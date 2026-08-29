@@ -230,13 +230,22 @@ and `DispatchOutboxRepository::claim_one()` (introduced by the first draft) are 
 After the commit, `DispatchEnqueuer` calls one **non-throwing** kick seam
 (`DispatchWorker::request_immediate_run()`):
 
-- ensures a one-off `DispatchWorker::HOOK` event is scheduled for now
+- ensures a one-off **`DispatchWorker::IMMEDIATE_HOOK`
+  (`universal_support_chat_telegram_dispatch_immediate`)** event is scheduled for now
   (`wp_schedule_single_event`), and
 - fires WordPress core's own non-blocking cron loopback (`spawn_cron()` — a `wp_remote_post`
   with `blocking => false`, `timeout => 0.01`), so the dispatch worker runs in a **separate
   loopback request** within about a second, even on a `DISABLE_WP_CRON` site, without the
-  originating request waiting for it. `spawn_cron()`'s own `doing_cron` transient lock collapses
-  repeated kicks under load.
+  originating request waiting for it.
+
+The immediate hook is **deliberately distinct from the recurring safety-net hook**
+(`DispatchWorker::HOOK`, `universal_support_chat_telegram_dispatch_run`, 60 s interval). The
+recurring event is normally already scheduled on `HOOK`, so guarding on
+`wp_next_scheduled( HOOK )` would never let an expedited one-off be created and the kick would
+be a no-op in the deployed state. Both hooks call `DispatchWorker::run()`. At most one immediate
+event is ever pending — the `wp_next_scheduled( IMMEDIATE_HOOK )` guard plus
+`wp_schedule_single_event`'s own 10-minute same-hook de-duplication collapse repeated kicks
+under load. Deactivation and uninstall clear **both** hooks (`DispatchWorker::unschedule()`).
 
 **All** Telegram-facing work — `ensure_channel_case` (including new-conversation
 `createForumTopic`), the `created`-only `notify_operators`, and `deliver_message` with

@@ -47,11 +47,19 @@ mechanism. v2 implements that.
 3. **Keep** `TelegramDispatchService::DELIVERY_CLASS_INTERACTIVE` and
    `deliver_one( DispatchRecord $record, string $delivery_class )`; `dispatch_due()` passes
    `DELIVERY_CLASS_INTERACTIVE` (every outbox row is a website-chat message).
-4. **New** `DispatchWorker::request_immediate_run(): void` — `static`, **non-throwing**
-   (`try { … } catch ( \Throwable ) {}`): ensure a one-off `self::HOOK` event at `time()`, then
-   call `spawn_cron()`. `DispatchEnqueuer::kick()` calls it (also wrapped, so a fatal in the
-   seam can never touch the committed row or the response).
-5. **No** schema / `db_version` / version / route / setting / menu / dependency change.
+4. **New** `DispatchWorker::IMMEDIATE_HOOK` (`universal_support_chat_telegram_dispatch_immediate`)
+   — a one-off hook **distinct** from the recurring `DispatchWorker::HOOK`
+   (`universal_support_chat_telegram_dispatch_run`, 60 s). The recurring event is normally
+   already scheduled on `HOOK`, so a `wp_next_scheduled( HOOK )` guard would never create an
+   expedited one-off in the deployed state. `register()` binds **both** hooks to `run()`.
+5. **New** `DispatchWorker::request_immediate_run(): void` — `static`, **non-throwing**
+   (`try { … } catch ( \Throwable ) {}`): if no `IMMEDIATE_HOOK` event is pending, schedule one
+   at `time()`; then call `spawn_cron()`. `DispatchEnqueuer` calls it after commit. At most one
+   immediate event pending (`wp_next_scheduled` guard + `wp_schedule_single_event`'s own
+   de-dup).
+6. `DispatchWorker::unschedule()` (deactivation / uninstall) clears **both** `HOOK` and
+   `IMMEDIATE_HOOK`. `Deactivator` / `Uninstaller` already call it — no change there.
+7. **No** schema / `db_version` / version / route / setting / menu / dependency change.
    `telegram_dispatch_enabled` stays the sole opt-in; disabled ⇒ no transaction, no outbox row,
    no kick.
 
@@ -64,7 +72,8 @@ mechanism. v2 implements that.
 - `src/TelegramDispatch/DispatchOutboxRepository.php` — drop `claim_one()`.
 - `src/TelegramDispatch/DispatchEnqueuer.php` — drop the immediate dependency; `kick()` →
   `DispatchWorker::request_immediate_run()`, wrapped.
-- `src/TelegramDispatch/DispatchWorker.php` — add `request_immediate_run()`.
+- `src/TelegramDispatch/DispatchWorker.php` — add `IMMEDIATE_HOOK`, bind it to `run()`, add
+  `request_immediate_run()`, and make `unschedule()` clear both hooks.
 - `src/Core/Plugin.php` — drop the `set_immediate_dispatch()` line.
 
 ## 6. Security / privacy
@@ -88,8 +97,12 @@ Remove the v1 `attempt_now` / `claim_one` tests. Add / revise:
 - `TelegramDispatchServiceTest` — worker path unchanged; explicit "new conversation:
   `dispatch_due()` creates the binding + topic and delivers as `interactive_chat`, converging
   with no duplicate on retry".
-- `DispatchWorkerTest` (new or extended) — `request_immediate_run()` schedules the one-off event
-  and is a no-op-safe non-throwing seam even when `spawn_cron` / scheduling fails.
+- `DispatchWorkerTest` (new) — **with the recurring `HOOK` event already scheduled (the normal
+  deployed state)**: `request_immediate_run()` still schedules exactly one **due**
+  `IMMEDIATE_HOOK` event; repeated kicks do not stack immediate events; the immediate event
+  invokes the same `run()` / `dispatch_due()`; it is non-throwing when `spawn_cron` raises/errors
+  or scheduling is refused, leaving the committed outbox row recoverable; `unschedule()` clears
+  **both** the recurring and the immediate hook.
 - Interop (`TelegramDispatchInteropTest`, both WP/PHP variants, real signed Contract v1 against
   the UT ADR-0045 branch):
   - a real visitor REST POST on a **new** conversation makes **zero** `api.telegram.org`
