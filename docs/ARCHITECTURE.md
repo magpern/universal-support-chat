@@ -24,7 +24,7 @@ See [ADR-0002](adr/0002-plugin-identity-and-ownership-boundaries.md).
 | Conversations | `UniversalSupportChat\Conversations` | Implemented (SC-M01: SoR, visitor REST, retention) |
 | ChatWidget | `UniversalSupportChat\ChatWidget` | Implemented (SC-M02: minimal visitor widget) |
 | Availability | — | Not authorized until SC-M06 |
-| AI | — | Not authorized until SC-AI1 |
+| AI | — | Not authorized until SC-AI1. No AI/LLM/RAG/embeddings/vector store/content ingestion/retrieval/automated-answer capability exists today. A future AI-assisted support / RAG knowledge base is deferred to [SC-AI3](milestones/sc-ai3-ai-assisted-support-and-rag.md) (own ADR + plan + PO approval required). |
 | ChannelContract | `UniversalSupportChat\ChannelContract` | SC-M03 work package 0: authenticated Contract v1 server (ADR-0007) — peer key store, nonce replay store, signature verification, pairing admin UI, truthful discovery. No adapter is paired by default; no migration/cutover code. |
 
 Channel adapters (e.g. Universal Telegram) are **external plugins**, not boundaries inside this repository. A structural unit test forbids premature `src/` directories for unauthorized boundaries.
@@ -65,7 +65,7 @@ Do not maintain a second full copy of Contract v1 in another repository.
 4. SC-M04 (telegram-optional acceptance)
 5. SC-M05, SC-M06, **SC-AI1**, then **SC-AI2**
 
-SC-AI1 precedes SC-AI2.
+SC-AI1 precedes SC-AI2. **SC-AI3** (AI-assisted support / RAG knowledge base) is a deferred future note only — unscheduled, unauthorized, needs its own ADR, plan, and PO approval.
 
 ## Versioning conventions
 

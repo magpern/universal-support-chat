@@ -16,6 +16,7 @@ This registry reflects runtime progress after SC-M00/SC-M01.
 | SC-M06 | Support Availability and Offline Tickets | [sc-m06-support-availability-and-offline-tickets.md](sc-m06-support-availability-and-offline-tickets.md) | Planned | SC-M02; soft SC-M04 | R5, R7 |
 | SC-AI1 | Operator AI Drafts and Approve-and-Send | [sc-ai1-operator-ai-drafts-approve-and-send.md](sc-ai1-operator-ai-drafts-approve-and-send.md) | Planned | SC-M02; before SC-AI2 | Safety |
 | SC-AI2 | Controlled Direct AI Responses | [sc-ai2-controlled-direct-ai-responses.md](sc-ai2-controlled-direct-ai-responses.md) | Planned | SC-AI1; SC-M06 recommended | R4, R6 |
+| SC-AI3 | AI-Assisted Support / RAG Knowledge Base | [sc-ai3-ai-assisted-support-and-rag.md](sc-ai3-ai-assisted-support-and-rag.md) | Future / not implemented (deferred — no ADR, plan, or PO approval) | SC-AI1; SC-AI2; own ADR + plan + PO approval | R4, R6 |
 
 ## Locked execution order
 
@@ -25,4 +26,4 @@ This registry reflects runtime progress after SC-M00/SC-M01.
 3. SC-M03 → SC-M04  
 4. SC-M05, SC-M06, SC-AI1, then SC-AI2  
 
-**SC-AI1 precedes SC-AI2.**
+**SC-AI1 precedes SC-AI2.** SC-AI3 (AI-assisted support / RAG) is a deferred future note only — not scheduled, not authorized; it needs its own ADR, plan, and Product Owner approval.
