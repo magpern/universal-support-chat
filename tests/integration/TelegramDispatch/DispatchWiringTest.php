@@ -7,7 +7,6 @@ namespace UniversalSupportChat\Tests\Integration\TelegramDispatch;
 
 use UniversalSupportChat\Audit\AuditLogger;
 use UniversalSupportChat\ChannelContract\ChannelStatusRepository;
-use UniversalSupportChat\ChannelContract\HandoffMapRepository;
 use UniversalSupportChat\ChannelContract\Rest\ContractOperationDispatcher;
 use UniversalSupportChat\Conversations\Conversation;
 use UniversalSupportChat\Conversations\ConversationRepository;
@@ -173,7 +172,6 @@ final class DispatchWiringTest extends WP_UnitTestCase {
 			$this->messages,
 			new ChannelStatusRepository( $this->health ),
 			new AuditLogger( $this->health, new Redactor() ),
-			new HandoffMapRepository( $this->health ),
 			$this->enqueuer
 		);
 
