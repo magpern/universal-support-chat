@@ -10,6 +10,11 @@ for the five work packages in §10 only, exactly within this plan's frozen scope
 begins from `main` after that acceptance record merges; the implementation branch and PR must
 cite both the freeze commit above and the acceptance record's merge commit.
 
+**Implementation complete** — [PR #44](https://github.com/magpern/universal-support-chat/pull/44)
+squash-merged to `main` at `b56ea231a5cfd124cffe4b22d8e168742bcad283` (2026-08-29). Closure:
+[`docs/closure/sc-adr-0015-operator-settings-diagnostics-implementation-closure.md`](../closure/sc-adr-0015-operator-settings-diagnostics-implementation-closure.md).
+Merged, not deployed to DEV or production.
+
 ## 1. Charter and ADR references
 
 - **ADR introduced:** [ADR-0015 — Operator-facing Support Chat Settings page, and separation
