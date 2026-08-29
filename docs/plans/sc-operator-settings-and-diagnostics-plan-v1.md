@@ -1,8 +1,14 @@
 # Plan: Operator-facing Support Chat Settings page, and separation of read-only Diagnostics (v1)
 
 Realises [ADR-0015](../adr/0015-operator-settings-page-and-diagnostics-separation.md). Frozen
-code-free; implementation is authorized only from the merged freeze baseline and must cite this
-plan's freeze commit SHA.
+code-free at `main` `f978ea5e46223215af2e2b27cf48a0facf81f28f` (PR #42). The frozen design
+below is unchanged.
+
+**Implementation authorized** — 2026-08-29, by Product Owner implementation acceptance
+[`docs/decisions/sc-adr-0015-operator-settings-diagnostics-po-acceptance.md`](../decisions/sc-adr-0015-operator-settings-diagnostics-po-acceptance.md),
+for the five work packages in §10 only, exactly within this plan's frozen scope. Implementation
+begins from `main` after that acceptance record merges; the implementation branch and PR must
+cite both the freeze commit above and the acceptance record's merge commit.
 
 ## 1. Charter and ADR references
 
