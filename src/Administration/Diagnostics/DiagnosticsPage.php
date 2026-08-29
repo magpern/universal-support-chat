@@ -22,6 +22,11 @@ use UniversalSupportChat\Persistence\SchemaHealth;
 final class DiagnosticsPage {
 
 	/**
+	 * Settings-menu page slug (`options-general.php?page=<SLUG>`).
+	 */
+	public const SLUG = 'universal-support-chat';
+
+	/**
 	 * Schema health.
 	 *
 	 * @var SchemaHealth
@@ -70,7 +75,7 @@ final class DiagnosticsPage {
 			__( 'Universal Support Chat', 'universal-support-chat' ),
 			__( 'Support Chat', 'universal-support-chat' ),
 			CapabilityRegistrar::MANAGE,
-			'universal-support-chat',
+			self::SLUG,
 			array( $this, 'render' )
 		);
 	}
