@@ -9,8 +9,8 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Administration;
 
-use UniversalSupportChat\Administration\Diagnostics\DiagnosticsPage;
 use UniversalSupportChat\Administration\Hub\HubPage;
+use UniversalSupportChat\Administration\Settings\SupportChatSettingsPage;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
 
 /**
@@ -75,7 +75,7 @@ final class PluginActionLinks {
 			),
 			'usc-settings'      => sprintf(
 				'<a href="%s">%s</a>',
-				esc_url( admin_url( 'options-general.php?page=' . DiagnosticsPage::SLUG ) ),
+				esc_url( admin_url( 'admin.php?page=' . SupportChatSettingsPage::SLUG ) ),
 				esc_html__( 'Settings', 'universal-support-chat' )
 			),
 		);

@@ -9,12 +9,14 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Core;
 
+use UniversalSupportChat\Administration\Compat\LegacySettingsRedirect;
 use UniversalSupportChat\Administration\Conversations\ConversationDetailPage;
 use UniversalSupportChat\Administration\Conversations\ConversationInboxPage;
 use UniversalSupportChat\Administration\Conversations\HubActions;
 use UniversalSupportChat\Administration\Diagnostics\DiagnosticsPage;
 use UniversalSupportChat\Administration\Hub\HubPage;
 use UniversalSupportChat\Administration\PluginActionLinks;
+use UniversalSupportChat\Administration\Settings\SupportChatSettingsPage;
 use UniversalSupportChat\Audit\AuditLogger;
 use UniversalSupportChat\Audit\AuditLogRepository;
 use UniversalSupportChat\ChannelContract\Admin\PairingActions;
@@ -189,7 +191,6 @@ final class Plugin {
 		// topic creation, notify, delivery with delivery_class=interactive_chat
 		// — happens only in this WP-Cron worker.
 
-		( new DiagnosticsPage( $schema_health, $audit_repo, $vault ) )->register();
 		( new PluginActionLinks( UNIVERSAL_SUPPORT_CHAT_PLUGIN_FILE ) )->register();
 		( new ConversationsController( $schema_health, $conversations, $messages, $dispatch_enqueuer ) )->register();
 		( new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit, $dispatch_outbox ) )->register();
@@ -203,9 +204,16 @@ final class Plugin {
 		( new PairingPage( $own_keys, $peers ) )->register();
 		( new PairingActions( $pairing, $own_keys ) )->register();
 
+		// ADR-0015: the Support Chat menu owns three submenus — Conversations
+		// (the Hub), Settings, and Diagnostics. The Hub top-level is
+		// registered first so its explicit "Conversations" child label wins.
+		// No new top-level menu is added.
 		$inbox  = new ConversationInboxPage( $schema_health, $conversations );
 		$detail = new ConversationDetailPage( $schema_health, $conversations, $messages, $notes );
 		( new HubPage( $inbox, $detail ) )->register();
+		( new SupportChatSettingsPage( $settings, $peers ) )->register();
+		( new DiagnosticsPage( $schema_health, $audit_repo, $vault, $settings, $peers, $dispatch_outbox ) )->register();
+		( new LegacySettingsRedirect() )->register();
 		( new HubActions( $schema_health, $conversations, $messages, $notes, $audit, $dispatch_enqueuer ) )->register();
 		( new WidgetAssets( $settings, $schema_health ) )->register();
 

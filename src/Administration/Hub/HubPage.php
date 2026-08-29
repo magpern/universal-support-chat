@@ -66,6 +66,18 @@ final class HubPage {
 			'dashicons-format-chat',
 			58
 		);
+
+		// Explicit first submenu so the auto-cloned child reads
+		// "Conversations", not "Support Chat" (ADR-0015 §1). The Settings
+		// and Diagnostics submenus are registered by their own classes.
+		add_submenu_page(
+			self::SLUG,
+			__( 'Support Chat Conversations', 'universal-support-chat' ),
+			__( 'Conversations', 'universal-support-chat' ),
+			CapabilityRegistrar::MANAGE,
+			self::SLUG,
+			array( $this, 'render' )
+		);
 	}
 
 	/**
