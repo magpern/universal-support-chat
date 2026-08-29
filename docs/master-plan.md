@@ -80,8 +80,9 @@ A human request **always** creates a durable Support Chat ticket with truthful o
 | 8 | [SC-M06](milestones/sc-m06-support-availability-and-offline-tickets.md) | Hours, status, offline tickets | R5, R7 |
 | 9 | [SC-AI1](milestones/sc-ai1-operator-ai-drafts-approve-and-send.md) | Operator drafts + Approve and send as *Support team* | Safety before autonomy |
 | 10 | [SC-AI2](milestones/sc-ai2-controlled-direct-ai-responses.md) | Direct AI as *AI assistant* | R4, R6 |
+| 11 | [SC-AI3](milestones/sc-ai3-ai-assisted-support-and-rag.md) | **Future / not implemented.** AI-assisted support / RAG knowledge base — grounded, traceable, site-scoped source corpus for SC-AI1/SC-AI2. Own ADR, plan, PO approval, evaluation, and privacy/security review required. | R4, R6 |
 
-**SC-AI1 precedes SC-AI2.**
+**SC-AI1 precedes SC-AI2.** SC-AI3 is a deferred forward-looking note only — see its charter; there is no ADR, plan, schema, code, or approval for it.
 
 ## 6. Explicit non-goals (foundation)
 
