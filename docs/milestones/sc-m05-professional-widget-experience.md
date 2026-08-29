@@ -37,8 +37,11 @@ Deliver professional launcher and greeting presentation.
 
 ## Planning note (ADR-0015)
 
-[ADR-0015](../adr/0015-operator-settings-page-and-diagnostics-separation.md) (Accepted) and
-its plan [sc-operator-settings-and-diagnostics-plan-v1.md](../plans/sc-operator-settings-and-diagnostics-plan-v1.md)
+[ADR-0015](../adr/0015-operator-settings-page-and-diagnostics-separation.md) (Accepted;
+**implemented** — PR #44 merged to `main` `b56ea23`, closure
+`docs/closure/sc-adr-0015-operator-settings-diagnostics-implementation-closure.md`, not
+deployed) and its plan
+[sc-operator-settings-and-diagnostics-plan-v1.md](../plans/sc-operator-settings-and-diagnostics-plan-v1.md)
 add a real operator-facing **Support Chat Settings** page for configuration the plugin
 already owns (widget enable/disable, Telegram mirror enable/disable, conversation retention
 periods, uninstall data-removal). That work adds **no** greeting/title/avatar/launcher
