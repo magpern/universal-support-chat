@@ -53,3 +53,4 @@ This foundation documentation freeze includes boundary plans for the initial roa
 | Plan | Scope |
 |---|---|
 | [sc-telegram-adapter-dispatch-plan-v1.md](sc-telegram-adapter-dispatch-plan-v1.md) | ADR-0012 — automatic Support Chat → Telegram message dispatch (SC-owned outbox); realises the SC-owned-delivery half of Universal Telegram ADR-0044 |
+| [sc-interactive-telegram-dispatch-plan-v1.md](sc-interactive-telegram-dispatch-plan-v1.md) | ADR-0014 — fixed `interactive_chat` delivery class on ADR-0012 mirror sends, a compatible `deliver_message` extension, and one bounded immediate dispatch attempt after the atomic outbox commit; counterpart to Universal Telegram ADR-0045 |
