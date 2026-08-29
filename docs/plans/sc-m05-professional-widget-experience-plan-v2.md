@@ -14,6 +14,14 @@ own commit, changes only ADR-0016's Status line to **Accepted**. **No implementa
 until that acceptance record merges.** The implementation branch and PR must cite both the
 freeze commit above and the acceptance record's merge commit.
 
+**Implementation authorized** — 2026-08-30, by Product Owner acceptance
+[`docs/decisions/sc-adr-0016-widget-presentation-po-acceptance.md`](../decisions/sc-adr-0016-widget-presentation-po-acceptance.md),
+for the work packages in §10 only, exactly within this plan's frozen scope. The SC-M05 freeze
+package (this plan + ADR-0016 as Proposed) merged to `main` at
+`76c5113db456e2586436dab73f2138be4e93dff6` (PR #46). Implementation begins from `main` after the
+acceptance record merges; the implementation branch and PR must cite both that freeze commit and
+the acceptance record's merge commit. The frozen technical content below is unchanged.
+
 ---
 
 ## 1. Charter and ADR references
