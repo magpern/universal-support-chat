@@ -14,6 +14,7 @@ use UniversalSupportChat\Administration\Conversations\ConversationInboxPage;
 use UniversalSupportChat\Administration\Conversations\HubActions;
 use UniversalSupportChat\Administration\Diagnostics\DiagnosticsPage;
 use UniversalSupportChat\Administration\Hub\HubPage;
+use UniversalSupportChat\Administration\PluginActionLinks;
 use UniversalSupportChat\Audit\AuditLogger;
 use UniversalSupportChat\Audit\AuditLogRepository;
 use UniversalSupportChat\ChannelContract\Admin\PairingActions;
@@ -183,6 +184,7 @@ final class Plugin {
 		);
 
 		( new DiagnosticsPage( $schema_health, $audit_repo, $vault ) )->register();
+		( new PluginActionLinks( UNIVERSAL_SUPPORT_CHAT_PLUGIN_FILE ) )->register();
 		( new ConversationsController( $schema_health, $conversations, $messages, $dispatch_enqueuer ) )->register();
 		( new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit, $dispatch_outbox ) )->register();
 		( new DispatchWorker( $dispatch_service ) )->register();
