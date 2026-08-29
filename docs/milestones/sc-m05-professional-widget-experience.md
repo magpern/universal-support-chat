@@ -33,7 +33,17 @@ Deliver professional launcher and greeting presentation.
 
 ## Frozen plan
 
+[sc-m05-professional-widget-experience-plan-v2.md](../plans/sc-m05-professional-widget-experience-plan-v2.md)
+— the implementation plan, realising
+[ADR-0016 — Support Chat widget presentation settings](../adr/0016-support-chat-widget-presentation-settings.md).
+It supersedes the original product-boundary freeze
 [sc-m05-professional-widget-experience-plan-v1.md](../plans/sc-m05-professional-widget-experience-plan-v1.md)
+(retained unedited).
+
+ADR-0016 is merged **Proposed** in the SC-M05 documentation freeze; a separate Product Owner
+acceptance record later changes only its Status to **Accepted**, and implementation begins only
+after that acceptance merges (the ADR-0015 sequence). This milestone's scope, requirements
+(R2/R3), and acceptance criteria are unchanged.
 
 ## Planning note (ADR-0015)
 
