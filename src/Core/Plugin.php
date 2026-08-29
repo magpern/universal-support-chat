@@ -183,6 +183,12 @@ final class Plugin {
 			$audit
 		);
 
+		// ADR-0014 §3: the visitor REST path and the Hub reply path make one
+		// bounded, best-effort immediate dispatch attempt after the atomic
+		// message + outbox commit; the WP-Cron worker below remains the
+		// durable recovery / eventual-delivery path.
+		$dispatch_enqueuer->set_immediate_dispatch( $dispatch_service );
+
 		( new DiagnosticsPage( $schema_health, $audit_repo, $vault ) )->register();
 		( new PluginActionLinks( UNIVERSAL_SUPPORT_CHAT_PLUGIN_FILE ) )->register();
 		( new ConversationsController( $schema_health, $conversations, $messages, $dispatch_enqueuer ) )->register();

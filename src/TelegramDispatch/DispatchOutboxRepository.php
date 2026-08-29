@@ -319,6 +319,51 @@ final class DispatchOutboxRepository {
 	}
 
 	/**
+	 * Reclaims expired leases, then atomically claims the single row for
+	 * `$message_uuid` if it is `pending`/`failed` and due — the single-row
+	 * analogue of `claim_due()`, used by the ADR-0014 bounded immediate
+	 * attempt. Returns `null` if the row is missing, not due, or already
+	 * `delivering`/`delivered`/`abandoned`/`suppressed` (all structurally
+	 * unreachable here), so the immediate attempt is then a safe no-op.
+	 *
+	 * @param string $message_uuid Support Chat message UUID.
+	 *
+	 * @return DispatchRecord|null The claimed row (state `delivering`), or null.
+	 */
+	public function claim_one( string $message_uuid ): ?DispatchRecord {
+		if ( ! $this->schema_health->is_available() || '' === trim( $message_uuid ) ) {
+			return null;
+		}
+
+		$this->reclaim_expired_leases();
+
+		global $wpdb;
+
+		$now   = current_time( 'mysql', true );
+		$lease = gmdate( 'Y-m-d H:i:s', time() + self::LEASE_SECONDS );
+		$table = $wpdb->prefix . Migrator::TELEGRAM_DISPATCH_TABLE;
+
+		$won = $wpdb->query(
+			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
+				"UPDATE {$table} SET state = %s, attempts = attempts + 1, claimed_at = %s, lease_expires_at = %s, updated_at = %s WHERE message_uuid = %s AND state IN ('pending', 'failed') AND next_attempt_at <= %s",
+				DispatchRecord::STATE_DELIVERING,
+				$now,
+				$lease,
+				$now,
+				$message_uuid,
+				$now
+			)
+		);
+
+		if ( ! is_int( $won ) || $won < 1 ) {
+			return null;
+		}
+
+		return $this->find( $message_uuid );
+	}
+
+	/**
 	 * Records a resolved channel case ref on a row without changing state.
 	 *
 	 * @param int    $id               Primary key.

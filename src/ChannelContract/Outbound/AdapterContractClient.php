@@ -52,6 +52,13 @@ class AdapterContractClient {
 	public const REASON_TRANSPORT_FAILED    = 'transport_failed';
 
 	/**
+	 * Default transport delivery class (ADR-0014 §2) — the behaviour every
+	 * existing caller already has. Sent on the wire so an adapter without
+	 * the counterpart change simply ignores it.
+	 */
+	public const DELIVERY_CLASS_STANDARD = 'standard';
+
+	/**
 	 * Constructor.
 	 *
 	 * @param PeerRepository   $peers     Peer key store.
@@ -252,10 +259,11 @@ class AdapterContractClient {
 	 * @param string $message_uuid    Support Chat message UUID being delivered.
 	 * @param string $body            Plaintext message body, in memory only.
 	 * @param string $attribution     Channel-facing attribution label.
+	 * @param string $delivery_class  Fixed, server-derived transport class (ADR-0014 §2). Defaults to `standard`; never part of the idempotency key.
 	 *
 	 * @return array{ok: bool, status: int, reason: string|null, reused: bool}
 	 */
-	public function deliver_message( string $peer_id, string $channel_case_ref, string $message_uuid, string $body, string $attribution = '' ): array {
+	public function deliver_message( string $peer_id, string $channel_case_ref, string $message_uuid, string $body, string $attribution = '', string $delivery_class = self::DELIVERY_CLASS_STANDARD ): array {
 		if ( '' === trim( $channel_case_ref ) || '' === trim( $message_uuid ) || '' === $body ) {
 			return array(
 				'ok'     => false,
@@ -275,6 +283,7 @@ class AdapterContractClient {
 				'idempotency_key'  => $idempotency_key,
 				'body'             => $body,
 				'attribution'      => $attribution,
+				'delivery_class'   => '' !== trim( $delivery_class ) ? $delivery_class : self::DELIVERY_CLASS_STANDARD,
 			)
 		);
 

@@ -73,6 +73,7 @@ final class TelegramDispatchInteropTest extends WP_UnitTestCase {
 	private SupportChatContractClient $ut_inbound_client;
 
 	private int $bot_id;
+	private int $parent_destination_id;
 	private string $parent_chat_id = '-1009999000001';
 
 	protected function setUp(): void {
@@ -146,6 +147,7 @@ final class TelegramDispatchInteropTest extends WP_UnitTestCase {
 
 		$parent = $this->ut_destinations->create( $this->bot_id, DestinationKind::SUPERGROUP, $this->parent_chat_id, null, 'interop-parent' );
 		self::assertNotNull( $parent );
+		$this->parent_destination_id = $parent->id();
 
 		update_option(
 			UtSettings::OPTION_NAME,
@@ -305,6 +307,112 @@ final class TelegramDispatchInteropTest extends WP_UnitTestCase {
 		$before = $this->outbox_count();
 		$this->service()->dispatch_due();
 		self::assertSame( $before, $this->outbox_count(), 'a Telegram-originated reply must never be mirrored back out' );
+	}
+
+	private function ut_delivery_class_of_last_row(): ?string {
+		global $wpdb;
+
+		$value = $wpdb->get_var( "SELECT delivery_class FROM {$wpdb->prefix}universal_telegram_outbound_messages ORDER BY id DESC LIMIT 1" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return null === $value ? null : (string) $value;
+	}
+
+	private function ut_interactive_row_count(): int {
+		global $wpdb;
+
+		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}universal_telegram_outbound_messages WHERE delivery_class = 'interactive_chat'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+	}
+
+	// ---- ADR-0014 / ADR-0045: interactive-priority dispatch ----
+
+	public function test_immediate_attempt_delivers_a_visitor_message_as_interactive_chat_end_to_end(): void {
+		$conversation = $this->open_conversation();
+		$message      = $this->sc_messages->create( $conversation->id(), ConversationMessage::DIRECTION_VISITOR, 'Is anyone there right now?', 'stored', null );
+		$this->sc_outbox->enqueue( $message->uuid(), $conversation->id(), $conversation->uuid(), 'visitor' );
+
+		$this->service()->attempt_now( $message->uuid() );
+
+		self::assertSame( 1, $this->ut_interactive_row_count(), 'the bounded immediate attempt created exactly one interactive_chat transport row' );
+		self::assertSame( DispatchRecord::STATE_DELIVERED, $this->sc_outbox->find( $message->uuid() )->state() );
+	}
+
+	public function test_hub_reply_also_arrives_as_interactive_chat(): void {
+		$conversation = $this->open_conversation();
+		$message      = $this->sc_messages->create( $conversation->id(), ConversationMessage::DIRECTION_OPERATOR, 'On it — checking now.', 'stored', null );
+		$this->sc_outbox->enqueue( $message->uuid(), $conversation->id(), $conversation->uuid(), 'operator' );
+
+		$this->service()->attempt_now( $message->uuid() );
+
+		self::assertSame( 'interactive_chat', $this->ut_delivery_class_of_last_row() );
+		self::assertSame( DispatchRecord::STATE_DELIVERED, $this->sc_outbox->find( $message->uuid() )->state() );
+	}
+
+	public function test_immediate_path_creates_exactly_one_ut_delivery_even_with_the_worker(): void {
+		$conversation = $this->open_conversation();
+		$message      = $this->sc_messages->create( $conversation->id(), ConversationMessage::DIRECTION_VISITOR, 'One only.', 'stored', null );
+		$this->sc_outbox->enqueue( $message->uuid(), $conversation->id(), $conversation->uuid(), 'visitor' );
+
+		$this->service()->attempt_now( $message->uuid() );
+		self::assertSame( 1, $this->ut_interactive_row_count() );
+
+		// A subsequent worker sweep must not double-deliver.
+		$this->service()->dispatch_due();
+
+		self::assertSame( 1, $this->ut_interactive_row_count(), 'idempotency: still exactly one interactive_chat delivery' );
+	}
+
+	public function test_a_failed_immediate_attempt_converges_through_the_worker_with_no_duplicate(): void {
+		// UT adapter disabled → the immediate attempt fails (row retryable).
+		update_option(
+			UtSettings::OPTION_NAME,
+			array_merge( ( new UtSettings() )->get(), array( 'support_chat_adapter_enabled' => false ) )
+		);
+
+		$conversation = $this->open_conversation();
+		$message      = $this->sc_messages->create( $conversation->id(), ConversationMessage::DIRECTION_VISITOR, 'retry me', 'stored', null );
+		$this->sc_outbox->enqueue( $message->uuid(), $conversation->id(), $conversation->uuid(), 'visitor' );
+
+		$this->service()->attempt_now( $message->uuid() );
+		self::assertSame( DispatchRecord::STATE_FAILED, $this->sc_outbox->find( $message->uuid() )->state() );
+		self::assertSame( 0, $this->ut_interactive_row_count() );
+
+		// Re-enable UT, make the row due, let the worker converge it.
+		update_option(
+			UtSettings::OPTION_NAME,
+			array_merge(
+				( new UtSettings() )->get(),
+				array(
+					'support_chat_adapter_enabled'        => true,
+					'support_chat_adapter_bot_id'         => $this->bot_id,
+					'support_chat_adapter_destination_id' => $this->parent_destination_id,
+				)
+			)
+		);
+		global $wpdb;
+		$wpdb->update(
+			$wpdb->prefix . 'universal_support_chat_telegram_dispatch',
+			array( 'next_attempt_at' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ),
+			array( 'message_uuid' => $message->uuid() ),
+			array( '%s' ),
+			array( '%s' )
+		);
+
+		$this->service()->dispatch_due();
+
+		self::assertSame( 1, $this->ut_interactive_row_count(), 'exactly one interactive_chat delivery after immediate-failure + worker convergence' );
+		self::assertSame( DispatchRecord::STATE_DELIVERED, $this->sc_outbox->find( $message->uuid() )->state() );
+	}
+
+	public function test_an_ordinary_standard_ut_delivery_is_not_promoted(): void {
+		$standard = new \UniversalTelegram\Telegram\Outbound\MessageDispatcher(
+			new \UniversalTelegram\Telegram\Outbound\OutboundMessageRepository( new UtSchemaHealth(), new UtCredentialVault() ),
+			new \UniversalTelegram\Queue\Dispatcher( new UtSchemaHealth() )
+		);
+		$result   = $standard->send( $this->bot_id, $this->parent_destination_id, 'a diagnostic alert' );
+		self::assertNotNull( $result );
+
+		self::assertSame( 'standard', $this->ut_delivery_class_of_last_row(), 'a diagnostic/alert send stays standard' );
+		self::assertSame( 0, $this->ut_interactive_row_count(), 'ordinary traffic is never promoted to interactive_chat' );
 	}
 
 	public function test_message_is_retained_and_retryable_when_ut_is_disabled(): void {

@@ -23,6 +23,8 @@ use UniversalSupportChat\Privacy\Redactor;
 use UniversalSupportChat\TelegramDispatch\DispatchEnqueuer;
 use UniversalSupportChat\TelegramDispatch\DispatchOutboxRepository;
 use UniversalSupportChat\TelegramDispatch\DispatchRecord;
+use UniversalSupportChat\TelegramDispatch\TelegramDispatchService;
+use UniversalSupportChat\Tests\Integration\TelegramDispatch\Support\RecordingAdapterContractClient;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_UnitTestCase;
@@ -192,5 +194,93 @@ final class DispatchWiringTest extends WP_UnitTestCase {
 		$this->assertSame( DispatchRecord::ORIGIN_TELEGRAM, $record->origin() );
 
 		$this->assertSame( array(), $this->outbox->claim_due( 20 ) );
+	}
+
+	// ---- ADR-0014 §3: the bounded immediate attempt ----
+
+	private RecordingAdapterContractClient $immediate_client;
+
+	private function enqueuer_with_immediate( ?RecordingAdapterContractClient $client = null ): DispatchEnqueuer {
+		$this->immediate_client = $client ?? new RecordingAdapterContractClient();
+		$service                = new TelegramDispatchService(
+			new Settings(),
+			$this->outbox,
+			$this->messages,
+			$this->immediate_client,
+			new AuditLogger( $this->health, new Redactor() )
+		);
+		$enqueuer               = new DispatchEnqueuer( new Settings(), $this->outbox );
+		$enqueuer->set_immediate_dispatch( $service );
+
+		return $enqueuer;
+	}
+
+	public function test_immediate_attempt_runs_after_commit_and_delivers_as_interactive_chat(): void {
+		$conversation = $this->open_conversation();
+
+		$response = $this->post_visitor_message( $this->enqueuer_with_immediate(), $conversation, 'Interactive please' );
+		$this->assertTrue( $response->get_data()['ok'] );
+
+		$deliver = $this->immediate_client->calls_for( 'deliver_message' );
+		$this->assertCount( 1, $deliver );
+		$this->assertSame( TelegramDispatchService::DELIVERY_CLASS_INTERACTIVE, $deliver[0]['delivery_class'] );
+
+		// The row committed first, then was delivered in-request.
+		$record = $this->outbox->find( $response->get_data()['message_uuid'] );
+		$this->assertSame( DispatchRecord::STATE_DELIVERED, $record->state() );
+	}
+
+	public function test_disabled_dispatch_makes_no_immediate_attempt(): void {
+		update_option( Settings::OPTION_NAME, array( 'telegram_dispatch_enabled' => false ) );
+		$conversation = $this->open_conversation();
+
+		$response = $this->post_visitor_message( $this->enqueuer_with_immediate(), $conversation, 'no mirror' );
+
+		$this->assertTrue( $response->get_data()['ok'] );
+		$this->assertSame( array(), $this->immediate_client->calls );
+	}
+
+	public function test_visitor_response_is_ok_when_the_immediate_attempt_throws(): void {
+		$throwing     = new class() extends RecordingAdapterContractClient {
+			public function ensure_channel_case( string $peer_id, string $conversation_uuid, string $reason_code, array $summary_meta = array() ): array {
+				throw new \RuntimeException( 'adapter exploded' );
+			}
+		};
+		$conversation = $this->open_conversation();
+
+		$response = $this->post_visitor_message( $this->enqueuer_with_immediate( $throwing ), $conversation, 'still fine' );
+
+		$this->assertTrue( $response->get_data()['ok'], 'the website response never fails on an immediate-attempt error' );
+		$this->assertNotEmpty( $response->get_data()['message_uuid'] );
+
+		// The committed message + outbox row survive and are retryable.
+		$record = $this->outbox->find( $response->get_data()['message_uuid'] );
+		$this->assertNotNull( $record );
+		$this->assertSame( DispatchRecord::STATE_FAILED, $record->state() );
+	}
+
+	public function test_telegram_originated_reply_triggers_no_immediate_attempt(): void {
+		$conversation = $this->open_conversation();
+		$enqueuer     = $this->enqueuer_with_immediate();
+
+		$dispatcher = new ContractOperationDispatcher(
+			$this->conversations,
+			$this->messages,
+			new ChannelStatusRepository( $this->health ),
+			new AuditLogger( $this->health, new Redactor() ),
+			$enqueuer
+		);
+
+		$dispatcher->dispatch(
+			'ingest_operator_reply',
+			'universal-telegram',
+			array(
+				'channel_case_ref' => $conversation->uuid(),
+				'body'             => 'from telegram',
+				'idempotency_key'  => wp_generate_uuid4(),
+			)
+		);
+
+		$this->assertSame( array(), $this->immediate_client->calls );
 	}
 }

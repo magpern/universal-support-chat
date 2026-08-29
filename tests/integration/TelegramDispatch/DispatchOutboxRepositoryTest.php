@@ -137,4 +137,62 @@ final class DispatchOutboxRepositoryTest extends WP_UnitTestCase {
 		$this->assertArrayNotHasKey( DispatchRecord::STATE_PENDING, $after );
 		$this->assertSame( 1, $after[ DispatchRecord::STATE_SUPPRESSED ] );
 	}
+
+	// ---- ADR-0014 §3: claim_one (single-row lease) ----
+
+	public function test_claim_one_claims_a_pending_due_row_and_stamps_the_lease(): void {
+		$uuid = wp_generate_uuid4();
+		$this->outbox->enqueue( $uuid, 1, wp_generate_uuid4(), 'visitor' );
+
+		$record = $this->outbox->claim_one( $uuid );
+
+		$this->assertNotNull( $record );
+		$this->assertSame( $uuid, $record->message_uuid() );
+		$this->assertSame( DispatchRecord::STATE_DELIVERING, $record->state() );
+		$this->assertSame( 1, $record->attempts() );
+		$this->assertNotNull( $record->claimed_at() );
+		$this->assertNotNull( $record->lease_expires_at() );
+	}
+
+	public function test_claim_one_is_a_no_op_for_a_missing_delivering_or_suppressed_row(): void {
+		$this->assertNull( $this->outbox->claim_one( wp_generate_uuid4() ), 'missing row' );
+
+		$live = wp_generate_uuid4();
+		$this->outbox->enqueue( $live, 1, wp_generate_uuid4(), 'visitor' );
+		$this->assertNotNull( $this->outbox->claim_one( $live ) );
+		$this->assertNull( $this->outbox->claim_one( $live ), 'already delivering' );
+
+		$suppr = wp_generate_uuid4();
+		$this->outbox->mark_telegram_origin( $suppr, 1, wp_generate_uuid4(), 'operator' );
+		$this->assertNull( $this->outbox->claim_one( $suppr ), 'suppressed is unreachable' );
+	}
+
+	public function test_claim_one_reclaims_an_expired_lease_then_claims(): void {
+		global $wpdb;
+		$uuid = wp_generate_uuid4();
+		$this->outbox->enqueue( $uuid, 1, wp_generate_uuid4(), 'visitor' );
+
+		$first = $this->outbox->claim_one( $uuid );
+		$wpdb->update(
+			$wpdb->prefix . Migrator::TELEGRAM_DISPATCH_TABLE,
+			array( 'lease_expires_at' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ),
+			array( 'id' => $first->id() ),
+			array( '%s' ),
+			array( '%d' )
+		);
+
+		$reclaimed = $this->outbox->claim_one( $uuid );
+
+		$this->assertNotNull( $reclaimed, 'the expired lease is reclaimed and the row re-claimed' );
+		$this->assertSame( DispatchRecord::STATE_DELIVERING, $reclaimed->state() );
+	}
+
+	public function test_claim_one_does_not_claim_a_row_that_is_not_yet_due(): void {
+		$uuid = wp_generate_uuid4();
+		$this->outbox->enqueue( $uuid, 1, wp_generate_uuid4(), 'visitor' );
+		$claimed = $this->outbox->claim_one( $uuid );
+		$this->outbox->mark_failed( $claimed->id(), 'transient', 3600 );
+
+		$this->assertNull( $this->outbox->claim_one( $uuid ), 'a failed row backed off an hour is not due' );
+	}
 }

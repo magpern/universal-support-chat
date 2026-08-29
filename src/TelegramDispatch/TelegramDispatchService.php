@@ -38,6 +38,20 @@ final class TelegramDispatchService {
 	 */
 	public const PEER_ID = 'universal-telegram';
 
+	/**
+	 * Fixed, server-derived transport delivery class for every ADR-0012
+	 * mirror send (ADR-0014 §1). Every outbox row is a normal visitor
+	 * message or Hub operator reply, so the class is a constant, never
+	 * derived from message text or a request parameter.
+	 */
+	public const DELIVERY_CLASS_INTERACTIVE = 'interactive_chat';
+
+	/**
+	 * Short retry delay after a failed / errored bounded immediate attempt
+	 * (ADR-0014 §3) — the worker then converges the row promptly.
+	 */
+	private const IMMEDIATE_RETRY_BACKOFF = 30;
+
 	private const MAX_BODY_CHARS = 4096;
 
 	/**
@@ -87,6 +101,63 @@ final class TelegramDispatchService {
 	}
 
 	/**
+	 * ADR-0014 §3: one bounded, best-effort immediate delivery attempt for
+	 * a just-committed outbox row, run in the visitor / Hub request after
+	 * the atomic message+outbox commit. Claims the single row (existing
+	 * lease protocol), runs the identical worker delivery routine with the
+	 * fixed `interactive_chat` class, and swallows every failure — any
+	 * exception, timeout, or transport error leaves the row retryable for
+	 * the unchanged WP-Cron worker. Never throws; the website response
+	 * never waits on retries. A no-op when dispatch is disabled or the row
+	 * cannot be claimed (already delivering / delivered / suppressed).
+	 *
+	 * @param string $message_uuid The committed message's UUID.
+	 */
+	public function attempt_now( string $message_uuid ): void {
+		if ( ! $this->is_enabled() ) {
+			return;
+		}
+
+		$record = $this->outbox->claim_one( $message_uuid );
+		if ( null === $record ) {
+			return;
+		}
+
+		try {
+			$outcome = $this->deliver_one( $record, self::DELIVERY_CLASS_INTERACTIVE );
+		} catch ( \Throwable $exception ) {
+			$this->outbox->mark_failed( $record->id(), 'immediate_attempt_error', self::IMMEDIATE_RETRY_BACKOFF );
+			$outcome = DispatchRecord::STATE_FAILED;
+		}
+
+		$this->audit->record(
+			'telegram_dispatch.immediate',
+			'system',
+			null,
+			array( 'outcome' => $this->immediate_outcome_label( $outcome ) ),
+			array( 'outcome' => Classification::PUBLIC ),
+			Classification::INTERNAL
+		);
+	}
+
+	/**
+	 * Non-content label for an immediate-attempt outcome.
+	 *
+	 * @param string $state Terminal-or-retry state the row was left in.
+	 */
+	private function immediate_outcome_label( string $state ): string {
+		if ( DispatchRecord::STATE_DELIVERED === $state ) {
+			return 'delivered';
+		}
+
+		if ( DispatchRecord::STATE_ABANDONED === $state ) {
+			return 'abandoned';
+		}
+
+		return 'deferred';
+	}
+
+	/**
 	 * Processes up to $limit due outbox rows.
 	 *
 	 * @param int $limit Maximum rows to process this pass.
@@ -108,7 +179,7 @@ final class TelegramDispatchService {
 		foreach ( $this->outbox->claim_due( $limit ) as $record ) {
 			++$processed;
 
-			$outcome = $this->deliver_one( $record );
+			$outcome = $this->deliver_one( $record, self::DELIVERY_CLASS_INTERACTIVE );
 
 			if ( DispatchRecord::STATE_DELIVERED === $outcome ) {
 				++$delivered;
@@ -145,11 +216,13 @@ final class TelegramDispatchService {
 
 	/**
 	 * Delivers one claimed row. Returns the terminal-or-retry state it
-	 * left the row in.
+	 * left the row in. Shared unchanged between the WP-Cron worker sweep
+	 * and the ADR-0014 bounded immediate attempt.
 	 *
-	 * @param DispatchRecord $record Claimed outbox row (state `delivering`).
+	 * @param DispatchRecord $record         Claimed outbox row (state `delivering`).
+	 * @param string         $delivery_class Fixed transport class for the `deliver_message` call (ADR-0014 §2).
 	 */
-	private function deliver_one( DispatchRecord $record ): string {
+	private function deliver_one( DispatchRecord $record, string $delivery_class ): string {
 		$message = $this->messages->find_by_uuid( $record->message_uuid() );
 
 		if ( null === $message ) {
@@ -204,7 +277,8 @@ final class TelegramDispatchService {
 			$channel_case_ref,
 			$message->uuid(),
 			$body,
-			$this->attribution( $record->direction() )
+			$this->attribution( $record->direction() ),
+			$delivery_class
 		);
 
 		if ( $deliver['ok'] ) {

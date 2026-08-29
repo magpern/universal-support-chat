@@ -66,21 +66,31 @@ jobs:
 
   interop:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - wp-version: '6.9'
+            php-version: '8.1'
+          - wp-version: '7.1'
+            php-version: '8.3'
     steps:
       - name: Checkout universal-support-chat
         uses: actions/checkout@v7
-      # Pinned to the merged Universal Telegram transport-only commit
-      # (ADR-0044) this feature was built and verified against — never a
-      # floating branch. Bump deliberately alongside the SC-side changes.
+      # Pinned to the Universal Telegram ADR-0045 implementation branch head
+      # (interactive-priority transport — the counterpart this SC feature
+      # needs). MUST be re-pinned to Universal Telegram `main` once
+      # `feature/ut-interactive-chat-delivery-priority` merges. Never a
+      # floating branch; bump deliberately alongside the SC-side changes.
       - name: Checkout universal-telegram (pinned)
         uses: actions/checkout@v7
         with:
           repository: magpern/universal-telegram
-          ref: 1af1cf3d9011060cb9244adfd93cfa916acfbdc6
+          ref: 8d8913ec61ad8052be1c293d7e746274e01d822d
           path: universal-telegram-sibling
       - name: Install dependencies
         run: bin/docker/composer.sh install --no-interaction
       - name: Cross-plugin interop suite (real dual-plugin, real Contract v1)
         env:
           UNIVERSAL_TELEGRAM_HOST_PATH: ${{ github.workspace }}/universal-telegram-sibling
-        run: bin/docker/test-integration-interop.sh --wp-version=6.9 --php-version=8.1
+        run: bin/docker/test-integration-interop.sh --wp-version=${{ matrix.wp-version }} --php-version=${{ matrix.php-version }}
