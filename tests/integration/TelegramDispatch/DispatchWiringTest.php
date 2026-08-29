@@ -20,9 +20,11 @@ use UniversalSupportChat\Persistence\MigrationLock;
 use UniversalSupportChat\Persistence\Migrator;
 use UniversalSupportChat\Persistence\SchemaHealth;
 use UniversalSupportChat\Privacy\Redactor;
+use UniversalSupportChat\Conversations\ConversationMessage;
 use UniversalSupportChat\TelegramDispatch\DispatchEnqueuer;
 use UniversalSupportChat\TelegramDispatch\DispatchOutboxRepository;
 use UniversalSupportChat\TelegramDispatch\DispatchRecord;
+use UniversalSupportChat\TelegramDispatch\DispatchWorker;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_UnitTestCase;
@@ -192,5 +194,88 @@ final class DispatchWiringTest extends WP_UnitTestCase {
 		$this->assertSame( DispatchRecord::ORIGIN_TELEGRAM, $record->origin() );
 
 		$this->assertSame( array(), $this->outbox->claim_due( 20 ) );
+	}
+
+	// ---- ADR-0014 Amendment 1: the request does zero Telegram I/O ----
+
+	/**
+	 * @var array<int, string>
+	 */
+	private array $http_urls = array();
+
+	private function spy_http(): void {
+		$this->http_urls = array();
+		add_filter(
+			'pre_http_request',
+			function ( $pre, $args, $url ) {
+				$this->http_urls[] = (string) $url;
+
+				// Fail every outbound request — the point is that the visitor
+				// request must not depend on any of them.
+				return new \WP_Error( 'blocked_in_test', 'no outbound HTTP in tests' );
+			},
+			10,
+			3
+		);
+	}
+
+	private function assert_no_telegram_http(): void {
+		foreach ( $this->http_urls as $url ) {
+			$this->assertStringNotContainsString( 'api.telegram.org', $url, 'the visitor / Hub request made a Telegram API call' );
+		}
+	}
+
+	public function test_visitor_rest_message_makes_no_telegram_http_and_schedules_the_immediate_worker(): void {
+		$this->spy_http();
+		wp_clear_scheduled_hook( DispatchWorker::IMMEDIATE_HOOK );
+		// Normal deployed state: the recurring sweep is already scheduled.
+		if ( ! wp_next_scheduled( DispatchWorker::HOOK ) ) {
+			wp_schedule_event( time() + 60, DispatchWorker::SCHEDULE, DispatchWorker::HOOK );
+		}
+
+		$conversation = $this->open_conversation();
+		$response     = $this->post_visitor_message( $this->enqueuer, $conversation, 'no sync telegram please' );
+
+		$this->assertTrue( $response->get_data()['ok'] );
+		$this->assertNotNull( $this->messages->find_by_uuid( $response->get_data()['message_uuid'] ) );
+		$this->assertNotNull( $this->outbox->find( $response->get_data()['message_uuid'] ) );
+
+		$this->assert_no_telegram_http();
+
+		$due = wp_next_scheduled( DispatchWorker::IMMEDIATE_HOOK );
+		$this->assertNotFalse( $due, 'a due immediate worker run was scheduled even though the recurring hook exists' );
+		$this->assertLessThanOrEqual( time(), (int) $due );
+	}
+
+	public function test_the_enqueuer_makes_no_contract_or_telegram_call_for_either_direction(): void {
+		$this->spy_http();
+
+		foreach ( array( ConversationMessage::DIRECTION_VISITOR, ConversationMessage::DIRECTION_OPERATOR ) as $direction ) {
+			$conversation = $this->open_conversation();
+			$message      = $this->enqueuer->persist_and_enqueue(
+				$conversation->uuid(),
+				fn (): ?ConversationMessage => $this->messages->create( $conversation->id(), $direction, 'body', 'stored', null )
+			);
+
+			$this->assertInstanceOf( ConversationMessage::class, $message );
+			$this->assertNotNull( $this->outbox->find( $message->uuid() ), "outbox row committed for {$direction}" );
+			$this->assertSame( DispatchRecord::STATE_PENDING, $this->outbox->find( $message->uuid() )->state() );
+		}
+
+		$this->assert_no_telegram_http();
+	}
+
+	public function test_commit_and_response_survive_a_broken_async_kick(): void {
+		// Make WP-Cron scheduling itself refuse.
+		add_filter( 'schedule_event', '__return_false' );
+		add_filter( 'pre_http_request', static fn () => new \WP_Error( 'down', 'infra down' ), 10, 3 );
+
+		$conversation = $this->open_conversation();
+		$response     = $this->post_visitor_message( $this->enqueuer, $conversation, 'kick is broken but I still commit' );
+
+		$this->assertTrue( $response->get_data()['ok'], 'a broken async kick never fails the visitor response' );
+		$record = $this->outbox->find( $response->get_data()['message_uuid'] );
+		$this->assertNotNull( $record );
+		$this->assertSame( DispatchRecord::STATE_PENDING, $record->state(), 'the committed outbox row is intact and recoverable by the recurring sweep' );
 	}
 }

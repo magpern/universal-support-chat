@@ -121,7 +121,12 @@ final class DispatchEnqueuer {
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- transaction control statement.
 		$wpdb->query( 'COMMIT' );
 
-		$this->kick();
+		if ( $this->is_mirrored_direction( $message->direction() ) ) {
+			// ADR-0014 Amendment 1: the ONLY expedite step in the request —
+			// a non-blocking, non-throwing async kick. No Telegram I/O, no
+			// Contract call, no dependence on Universal Telegram here.
+			DispatchWorker::request_immediate_run();
+		}
 
 		return $message;
 	}
@@ -155,14 +160,5 @@ final class DispatchEnqueuer {
 			array( ConversationMessage::DIRECTION_VISITOR, ConversationMessage::DIRECTION_OPERATOR ),
 			true
 		);
-	}
-
-	/**
-	 * Schedules an immediate one-off worker run. WP-Cron collapses
-	 * identical hook+args events within a 10-minute window, so repeated
-	 * kicks under load do not pile up.
-	 */
-	private function kick(): void {
-		wp_schedule_single_event( time(), DispatchWorker::HOOK );
 	}
 }

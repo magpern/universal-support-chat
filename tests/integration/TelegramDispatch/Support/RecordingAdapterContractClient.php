@@ -13,7 +13,7 @@ use UniversalSupportChat\ChannelContract\Outbound\AdapterContractClient;
  * exercised without a paired Universal Telegram peer. The dedicated interop
  * suite covers the real signed Contract v1 path.
  */
-final class RecordingAdapterContractClient extends AdapterContractClient {
+class RecordingAdapterContractClient extends AdapterContractClient {
 
 	/** @var array<int, array<string, mixed>> */
 	public array $calls = array();
@@ -73,7 +73,7 @@ final class RecordingAdapterContractClient extends AdapterContractClient {
 		return $this->notify_result;
 	}
 
-	public function deliver_message( string $peer_id, string $channel_case_ref, string $message_uuid, string $body, string $attribution = '' ): array {
+	public function deliver_message( string $peer_id, string $channel_case_ref, string $message_uuid, string $body, string $attribution = '', string $delivery_class = self::DELIVERY_CLASS_STANDARD ): array {
 		$this->calls[] = array(
 			'op'               => 'deliver_message',
 			'peer_id'          => $peer_id,
@@ -81,6 +81,7 @@ final class RecordingAdapterContractClient extends AdapterContractClient {
 			'message_uuid'     => $message_uuid,
 			'body'             => $body,
 			'attribution'      => $attribution,
+			'delivery_class'   => $delivery_class,
 		);
 
 		return $this->deliver_result;

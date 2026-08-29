@@ -73,7 +73,17 @@ final class TelegramDispatchInteropTest extends WP_UnitTestCase {
 	private SupportChatContractClient $ut_inbound_client;
 
 	private int $bot_id;
+	private int $parent_destination_id;
 	private string $parent_chat_id = '-1009999000001';
+
+	/**
+	 * Count of real `api.telegram.org` requests seen by the fake HTTP
+	 * boundary — used to assert a visitor / Hub request makes none
+	 * (ADR-0014 Amendment 1).
+	 *
+	 * @var int
+	 */
+	private int $telegram_api_calls = 0;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -146,6 +156,7 @@ final class TelegramDispatchInteropTest extends WP_UnitTestCase {
 
 		$parent = $this->ut_destinations->create( $this->bot_id, DestinationKind::SUPERGROUP, $this->parent_chat_id, null, 'interop-parent' );
 		self::assertNotNull( $parent );
+		$this->parent_destination_id = $parent->id();
 
 		update_option(
 			UtSettings::OPTION_NAME,
@@ -170,12 +181,37 @@ final class TelegramDispatchInteropTest extends WP_UnitTestCase {
 		// SC dispatch feature on.
 		update_option( ScSettings::OPTION_NAME, array( 'telegram_dispatch_enabled' => true ) );
 
+		// `DispatchEnqueuer::persist_and_enqueue()`'s real `START TRANSACTION`
+		// implicitly commits `WP_UnitTestCase`'s wrapping transaction, so
+		// rows written here survive rollback. Truncate the affected tables
+		// on both `setUp` and `tearDown` (the pattern `DispatchWiringTest`
+		// establishes).
+		$this->truncate_committed_tables();
+
 		do_action( 'rest_api_init' ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 	}
 
 	protected function tearDown(): void {
+		$this->truncate_committed_tables();
 		remove_filter( 'pre_http_request', array( $this, 'fake_telegram_http' ), 10 );
 		parent::tearDown();
+	}
+
+	private function truncate_committed_tables(): void {
+		global $wpdb;
+
+		foreach (
+			array(
+				'universal_telegram_outbound_messages',
+				'universal_telegram_support_chat_bindings',
+				'universal_telegram_support_chat_delivery_keys',
+				'universal_support_chat_telegram_dispatch',
+				'universal_support_chat_conversation_messages',
+				'universal_support_chat_conversations',
+			) as $table
+		) {
+			$wpdb->query( "DELETE FROM {$wpdb->prefix}{$table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.SchemaChange, WordPress.DB.DirectDatabaseQuery.NoCaching -- test cleanup of rows that escaped rollback.
+		}
 	}
 
 	private function outbox_count(): int {
@@ -307,6 +343,166 @@ final class TelegramDispatchInteropTest extends WP_UnitTestCase {
 		self::assertSame( $before, $this->outbox_count(), 'a Telegram-originated reply must never be mirrored back out' );
 	}
 
+	private function ut_delivery_class_of_last_row(): ?string {
+		global $wpdb;
+
+		$value = $wpdb->get_var( "SELECT delivery_class FROM {$wpdb->prefix}universal_telegram_outbound_messages ORDER BY id DESC LIMIT 1" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		return null === $value ? null : (string) $value;
+	}
+
+	private function ut_interactive_row_count(): int {
+		global $wpdb;
+
+		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}universal_telegram_outbound_messages WHERE delivery_class = 'interactive_chat'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+	}
+
+	private function enqueuer(): \UniversalSupportChat\TelegramDispatch\DispatchEnqueuer {
+		return new \UniversalSupportChat\TelegramDispatch\DispatchEnqueuer( new ScSettings(), $this->sc_outbox );
+	}
+
+	// ---- ADR-0014 Amendment 1: no Telegram I/O in the request; worker-only delivery ----
+
+	public function test_a_new_conversation_visitor_message_makes_no_telegram_call_in_the_request_then_the_worker_delivers_it_as_interactive_chat(): void {
+		$conversation = $this->open_conversation();
+
+		$this->telegram_api_calls = 0;
+		$message                  = $this->enqueuer()->persist_and_enqueue(
+			$conversation->uuid(),
+			fn (): ?ConversationMessage => $this->sc_messages->create( $conversation->id(), ConversationMessage::DIRECTION_VISITOR, 'Is anyone there right now?', 'stored', null )
+		);
+		self::assertInstanceOf( ConversationMessage::class, $message );
+
+		// The request itself: no Telegram Bot API call, no Universal Telegram
+		// binding, just the committed outbox row.
+		self::assertSame( 0, $this->telegram_api_calls, 'the visitor request made a Telegram API call' );
+		self::assertNull( $this->ut_bindings->find_by_conversation_uuid( $conversation->uuid() ), 'no binding is created in the request' );
+		self::assertSame( DispatchRecord::STATE_PENDING, $this->sc_outbox->find( $message->uuid() )->state() );
+
+		// The async worker creates the topic/binding and delivers.
+		$this->service()->dispatch_due();
+
+		self::assertNotNull( $this->ut_bindings->find_by_conversation_uuid( $conversation->uuid() ) );
+		self::assertSame( 1, $this->ut_interactive_row_count() );
+		self::assertSame( DispatchRecord::STATE_DELIVERED, $this->sc_outbox->find( $message->uuid() )->state() );
+	}
+
+	public function test_a_hub_reply_also_makes_no_telegram_call_in_the_request_and_is_delivered_interactive_by_the_worker(): void {
+		$conversation = $this->open_conversation();
+
+		$this->telegram_api_calls = 0;
+		$message                  = $this->enqueuer()->persist_and_enqueue(
+			$conversation->uuid(),
+			fn (): ?ConversationMessage => $this->sc_messages->create( $conversation->id(), ConversationMessage::DIRECTION_OPERATOR, 'On it — checking now.', 'stored', null )
+		);
+		self::assertInstanceOf( ConversationMessage::class, $message );
+		self::assertSame( 0, $this->telegram_api_calls );
+
+		$this->service()->dispatch_due();
+
+		self::assertSame( 'interactive_chat', $this->ut_delivery_class_of_last_row() );
+		self::assertSame( DispatchRecord::STATE_DELIVERED, $this->sc_outbox->find( $message->uuid() )->state() );
+	}
+
+	public function test_an_existing_bound_conversation_gets_expedited_interactive_treatment_via_the_worker(): void {
+		$conversation = $this->open_conversation();
+
+		// First message establishes the binding.
+		$first = $this->sc_messages->create( $conversation->id(), ConversationMessage::DIRECTION_VISITOR, 'first', 'stored', null );
+		$this->sc_outbox->enqueue( $first->uuid(), $conversation->id(), $conversation->uuid(), 'visitor' );
+		$this->service()->dispatch_due();
+		self::assertNotNull( $this->ut_bindings->find_by_conversation_uuid( $conversation->uuid() ) );
+		self::assertSame( 1, $this->ut_interactive_row_count() );
+
+		// Second message on the now-bound conversation: still interactive, no dup.
+		$this->telegram_api_calls = 0;
+		$second                   = $this->enqueuer()->persist_and_enqueue(
+			$conversation->uuid(),
+			fn (): ?ConversationMessage => $this->sc_messages->create( $conversation->id(), ConversationMessage::DIRECTION_OPERATOR, 'second', 'stored', null )
+		);
+		self::assertSame( 0, $this->telegram_api_calls, 'no Telegram call in the originating request' );
+
+		$this->service()->dispatch_due();
+
+		self::assertSame( 2, $this->ut_interactive_row_count() );
+		self::assertSame( DispatchRecord::STATE_DELIVERED, $this->sc_outbox->find( $second->uuid() )->state() );
+	}
+
+	public function test_message_and_outbox_commit_survive_a_failing_async_kick(): void {
+		// A `pre_http_request` filter that errors every non-Telegram request
+		// (the cron loopback) and a scheduling refusal.
+		add_filter( 'schedule_event', '__return_false' );
+		add_filter(
+			'pre_http_request',
+			static function ( $pre, $args, $url ) {
+				return false !== strpos( (string) $url, 'api.telegram.org' ) ? $pre : new \WP_Error( 'down', 'infra down' );
+			},
+			5,
+			3
+		);
+
+		$conversation = $this->open_conversation();
+		$message      = $this->enqueuer()->persist_and_enqueue(
+			$conversation->uuid(),
+			fn (): ?ConversationMessage => $this->sc_messages->create( $conversation->id(), ConversationMessage::DIRECTION_VISITOR, 'commit me anyway', 'stored', null )
+		);
+
+		self::assertInstanceOf( ConversationMessage::class, $message );
+		self::assertSame( DispatchRecord::STATE_PENDING, $this->sc_outbox->find( $message->uuid() )->state(), 'the committed row is intact and recoverable' );
+	}
+
+	public function test_a_failed_first_worker_attempt_converges_on_the_next_sweep_with_no_duplicate(): void {
+		update_option(
+			UtSettings::OPTION_NAME,
+			array_merge( ( new UtSettings() )->get(), array( 'support_chat_adapter_enabled' => false ) )
+		);
+
+		$conversation = $this->open_conversation();
+		$message      = $this->sc_messages->create( $conversation->id(), ConversationMessage::DIRECTION_VISITOR, 'retry me', 'stored', null );
+		$this->sc_outbox->enqueue( $message->uuid(), $conversation->id(), $conversation->uuid(), 'visitor' );
+
+		$this->service()->dispatch_due();
+		self::assertSame( DispatchRecord::STATE_FAILED, $this->sc_outbox->find( $message->uuid() )->state() );
+		self::assertSame( 0, $this->ut_interactive_row_count() );
+
+		update_option(
+			UtSettings::OPTION_NAME,
+			array_merge(
+				( new UtSettings() )->get(),
+				array(
+					'support_chat_adapter_enabled'        => true,
+					'support_chat_adapter_bot_id'         => $this->bot_id,
+					'support_chat_adapter_destination_id' => $this->parent_destination_id,
+				)
+			)
+		);
+		global $wpdb;
+		$wpdb->update(
+			$wpdb->prefix . 'universal_support_chat_telegram_dispatch',
+			array( 'next_attempt_at' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ),
+			array( 'message_uuid' => $message->uuid() ),
+			array( '%s' ),
+			array( '%s' )
+		);
+
+		$this->service()->dispatch_due();
+
+		self::assertSame( 1, $this->ut_interactive_row_count(), 'exactly one interactive_chat delivery after retry convergence' );
+		self::assertSame( DispatchRecord::STATE_DELIVERED, $this->sc_outbox->find( $message->uuid() )->state() );
+	}
+
+	public function test_an_ordinary_standard_ut_delivery_is_not_promoted(): void {
+		$standard = new \UniversalTelegram\Telegram\Outbound\MessageDispatcher(
+			new \UniversalTelegram\Telegram\Outbound\OutboundMessageRepository( new UtSchemaHealth(), new UtCredentialVault() ),
+			new \UniversalTelegram\Queue\Dispatcher( new UtSchemaHealth() )
+		);
+		$result   = $standard->send( $this->bot_id, $this->parent_destination_id, 'a diagnostic alert' );
+		self::assertNotNull( $result );
+
+		self::assertSame( 'standard', $this->ut_delivery_class_of_last_row(), 'a diagnostic/alert send stays standard' );
+		self::assertSame( 0, $this->ut_interactive_row_count(), 'ordinary traffic is never promoted to interactive_chat' );
+	}
+
 	public function test_message_is_retained_and_retryable_when_ut_is_disabled(): void {
 		update_option(
 			UtSettings::OPTION_NAME,
@@ -339,6 +535,8 @@ final class TelegramDispatchInteropTest extends WP_UnitTestCase {
 		if ( false === strpos( $url, 'api.telegram.org' ) ) {
 			return $preempt;
 		}
+
+		++$this->telegram_api_calls;
 
 		if ( false !== strpos( $url, '/createForumTopic' ) ) {
 			static $thread = 500;

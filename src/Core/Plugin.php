@@ -183,6 +183,12 @@ final class Plugin {
 			$audit
 		);
 
+		// ADR-0014 Amendment 1: the visitor / Hub request only commits the
+		// message + outbox row and fires a non-blocking async kick
+		// (DispatchWorker::request_immediate_run). ALL Telegram-facing work —
+		// topic creation, notify, delivery with delivery_class=interactive_chat
+		// — happens only in this WP-Cron worker.
+
 		( new DiagnosticsPage( $schema_health, $audit_repo, $vault ) )->register();
 		( new PluginActionLinks( UNIVERSAL_SUPPORT_CHAT_PLUGIN_FILE ) )->register();
 		( new ConversationsController( $schema_health, $conversations, $messages, $dispatch_enqueuer ) )->register();

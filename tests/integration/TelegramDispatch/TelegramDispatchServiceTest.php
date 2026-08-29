@@ -240,4 +240,75 @@ final class TelegramDispatchServiceTest extends WP_UnitTestCase {
 			array( '%d' )
 		);
 	}
+
+	// ---- ADR-0014 Amendment 1: delivery is worker-only, class is interactive_chat ----
+
+	public function test_worker_delivers_with_delivery_class_interactive_chat(): void {
+		$message = $this->seed_message( ConversationMessage::DIRECTION_VISITOR, 'Where is my order?' );
+		$this->outbox->enqueue( $message->uuid(), 4242, wp_generate_uuid4(), 'visitor' );
+
+		$this->service()->dispatch_due( 10 );
+
+		$deliver = $this->client->calls_for( 'deliver_message' );
+		$this->assertCount( 1, $deliver );
+		$this->assertSame( TelegramDispatchService::DELIVERY_CLASS_INTERACTIVE, $deliver[0]['delivery_class'] );
+		$this->assertSame( DispatchRecord::STATE_DELIVERED, $this->outbox->find( $message->uuid() )->state() );
+	}
+
+	public function test_new_conversation_topic_creation_and_delivery_happen_in_the_worker_and_converge(): void {
+		$this->client->ensure_result['case_status'] = 'created';
+		$message                                    = $this->seed_message( ConversationMessage::DIRECTION_VISITOR, 'first contact' );
+		$this->outbox->enqueue( $message->uuid(), 4242, wp_generate_uuid4(), 'visitor' );
+
+		$this->service()->dispatch_due( 10 );
+
+		$this->assertCount( 1, $this->client->calls_for( 'ensure_channel_case' ) );
+		$this->assertCount( 1, $this->client->calls_for( 'notify_operators' ) );
+		$this->assertCount( 1, $this->client->calls_for( 'deliver_message' ) );
+		$this->assertSame( DispatchRecord::STATE_DELIVERED, $this->outbox->find( $message->uuid() )->state() );
+
+		$this->service()->dispatch_due( 10 );
+		$this->assertCount( 1, $this->client->calls_for( 'deliver_message' ) );
+	}
+
+	public function test_worker_converges_after_a_transient_failure_with_no_duplicate(): void {
+		$this->client->ensure_result = array(
+			'ok'               => false,
+			'status'           => 503,
+			'reason'           => AdapterContractClient::REASON_TRANSPORT_FAILED,
+			'channel_case_ref' => '',
+			'case_status'      => null,
+		);
+		$message                     = $this->seed_message( ConversationMessage::DIRECTION_OPERATOR, 'reply' );
+		$this->outbox->enqueue( $message->uuid(), 4242, wp_generate_uuid4(), 'operator' );
+
+		$this->service()->dispatch_due( 10 );
+		$this->assertSame( DispatchRecord::STATE_FAILED, $this->outbox->find( $message->uuid() )->state() );
+		$this->assertSame( array(), $this->client->calls_for( 'deliver_message' ) );
+
+		$this->client->ensure_result = array(
+			'ok'               => true,
+			'status'           => 200,
+			'reason'           => null,
+			'channel_case_ref' => 'ref-abc',
+			'case_status'      => 'reused',
+		);
+		$this->make_due( $message->uuid() );
+		$this->service()->dispatch_due( 10 );
+
+		$this->assertCount( 1, $this->client->calls_for( 'deliver_message' ) );
+		$this->assertSame( DispatchRecord::STATE_DELIVERED, $this->outbox->find( $message->uuid() )->state() );
+	}
+
+	private function make_due( string $message_uuid ): void {
+		global $wpdb;
+
+		$wpdb->update(
+			$wpdb->prefix . Migrator::TELEGRAM_DISPATCH_TABLE,
+			array( 'next_attempt_at' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ),
+			array( 'message_uuid' => $message_uuid ),
+			array( '%s' ),
+			array( '%s' )
+		);
+	}
 }
