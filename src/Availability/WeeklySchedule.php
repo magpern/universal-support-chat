@@ -89,13 +89,43 @@ final class WeeklySchedule {
 				throw new InvalidScheduleException( 'Weekday intervals must be a list.' );
 			}
 
-			$by_day[ $day ] = array_map(
-				static fn( $interval ) => TimeInterval::from_array( $interval ),
-				$intervals
-			);
+			$built = array();
+
+			foreach ( $intervals as $interval ) {
+				// A wholly-empty row from the Settings form ("no interval in
+				// this slot") is skipped; a half-filled row is still a real
+				// mistake and rejects the whole schedule.
+				if ( self::is_blank_interval( $interval ) ) {
+					continue;
+				}
+
+				$built[] = TimeInterval::from_array( $interval );
+			}
+
+			$by_day[ $day ] = $built;
 		}
 
 		return new self( $by_day );
+	}
+
+	/**
+	 * Whether an interval row is entirely empty (both fields blank / missing).
+	 *
+	 * @param mixed $interval Raw interval value.
+	 */
+	private static function is_blank_interval( $interval ): bool {
+		if ( array() === $interval || null === $interval || '' === $interval ) {
+			return true;
+		}
+
+		if ( ! is_array( $interval ) ) {
+			return false;
+		}
+
+		$start = isset( $interval['start'] ) ? trim( (string) $interval['start'] ) : '';
+		$end   = isset( $interval['end'] ) ? trim( (string) $interval['end'] ) : '';
+
+		return '' === $start && '' === $end;
 	}
 
 	/**

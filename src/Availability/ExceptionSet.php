@@ -42,6 +42,10 @@ final class ExceptionSet {
 			throw new InvalidScheduleException( 'Exceptions must be a map of dates.' );
 		}
 
+		if ( array() !== $raw && array_is_list( $raw ) ) {
+			$raw = self::rows_to_map( $raw );
+		}
+
 		$by_date = array();
 
 		foreach ( $raw as $date => $value ) {
@@ -77,6 +81,54 @@ final class ExceptionSet {
 		}
 
 		return $out;
+	}
+
+	/**
+	 * Converts the Settings form's row shape
+	 * (`[ { date, mode, start, end }, … ]`) to the canonical date map.
+	 * Blank rows (no date) are dropped; a `hours` row with no times becomes
+	 * a `closed` day.
+	 *
+	 * @param array<int, mixed> $rows Row list.
+	 *
+	 * @return array<string, mixed>
+	 *
+	 * @throws InvalidScheduleException When a row is not an array.
+	 */
+	private static function rows_to_map( array $rows ): array {
+		$map = array();
+
+		foreach ( $rows as $row ) {
+			if ( ! is_array( $row ) ) {
+				throw new InvalidScheduleException( 'Exception row must be an array.' );
+			}
+
+			$date = isset( $row['date'] ) ? trim( (string) $row['date'] ) : '';
+			if ( '' === $date ) {
+				continue;
+			}
+
+			$mode = isset( $row['mode'] ) ? (string) $row['mode'] : 'closed';
+
+			if ( 'closed' === $mode ) {
+				$map[ $date ] = 'closed';
+				continue;
+			}
+
+			$start = isset( $row['start'] ) ? trim( (string) $row['start'] ) : '';
+			$end   = isset( $row['end'] ) ? trim( (string) $row['end'] ) : '';
+
+			$map[ $date ] = ( '' === $start && '' === $end )
+				? 'closed'
+				: array(
+					array(
+						'start' => $start,
+						'end'   => $end,
+					),
+				);
+		}
+
+		return $map;
 	}
 
 	/**

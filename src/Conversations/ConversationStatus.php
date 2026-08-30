@@ -10,8 +10,10 @@ declare( strict_types=1 );
 namespace UniversalSupportChat\Conversations;
 
 /**
- * Status vocabulary for SC-M01. Availability/waiting-queue product states
- * beyond these remain SC-M06.
+ * Status vocabulary for SC-M01. SC-M06 (ADR-0017) adds exactly one edge —
+ * `new -> waiting_for_operator` — so a visitor's first message left while
+ * the server resolves availability as `unavailable` lands directly in the
+ * operator waiting queue, with no synthetic intermediate `open` state.
  */
 final class ConversationStatus {
 
@@ -29,7 +31,7 @@ final class ConversationStatus {
 	 */
 	private static function map(): array {
 		return array(
-			self::NEW                  => array( self::OPEN, self::ARCHIVED ),
+			self::NEW                  => array( self::OPEN, self::WAITING_FOR_OPERATOR, self::ARCHIVED ),
 			self::OPEN                 => array( self::WAITING_FOR_VISITOR, self::WAITING_FOR_OPERATOR, self::RESOLVED, self::ARCHIVED ),
 			self::WAITING_FOR_VISITOR  => array( self::OPEN, self::RESOLVED, self::ARCHIVED ),
 			self::WAITING_FOR_OPERATOR => array( self::OPEN, self::RESOLVED, self::ARCHIVED ),

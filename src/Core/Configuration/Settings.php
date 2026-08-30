@@ -9,6 +9,10 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Core\Configuration;
 
+use UniversalSupportChat\Availability\ExceptionSet;
+use UniversalSupportChat\Availability\InvalidScheduleException;
+use UniversalSupportChat\Availability\WeeklySchedule;
+
 /**
  * Sole owner of the universal_support_chat_settings option.
  */
@@ -16,6 +20,18 @@ final class Settings {
 
 	public const OPTION_NAME  = 'universal_support_chat_settings';
 	public const OPTION_GROUP = 'universal_support_chat_settings_group';
+
+	/**
+	 * Maximum stored length of the availability offline message (ADR-0017).
+	 */
+	private const OFFLINE_MESSAGE_MAX = 500;
+
+	/**
+	 * Default availability offline message (ADR-0017). Plain literal for the
+	 * same reason as {@see self::DEFAULT_WIDGET_GREETING}; translated where
+	 * rendered.
+	 */
+	public const DEFAULT_OFFLINE_MESSAGE = "The support team is offline right now. Leave your message here and we'll reply in this chat when we're back.";
 
 	/**
 	 * Maximum stored length of the widget title (ADR-0016).
@@ -62,7 +78,11 @@ final class Settings {
 	 *   telegram_dispatch_enabled: bool,
 	 *   widget_title: string,
 	 *   widget_greeting: string,
-	 *   widget_avatar_attachment_id: int
+	 *   widget_avatar_attachment_id: int,
+	 *   availability_schedule: array<string, array<int, array{start: string, end: string}>>,
+	 *   availability_exceptions: array<string, string|array<int, array{start: string, end: string}>>,
+	 *   availability_offline_message: string,
+	 *   availability_online_indicator: bool
 	 * }
 	 */
 	public function defaults(): array {
@@ -76,6 +96,10 @@ final class Settings {
 			'widget_title'                    => '',
 			'widget_greeting'                 => self::DEFAULT_WIDGET_GREETING,
 			'widget_avatar_attachment_id'     => 0,
+			'availability_schedule'           => WeeklySchedule::default_schedule()->to_array(),
+			'availability_exceptions'         => array(),
+			'availability_offline_message'    => self::DEFAULT_OFFLINE_MESSAGE,
+			'availability_online_indicator'   => true,
 		);
 	}
 
@@ -91,7 +115,11 @@ final class Settings {
 	 *   telegram_dispatch_enabled: bool,
 	 *   widget_title: string,
 	 *   widget_greeting: string,
-	 *   widget_avatar_attachment_id: int
+	 *   widget_avatar_attachment_id: int,
+	 *   availability_schedule: array<string, array<int, array{start: string, end: string}>>,
+	 *   availability_exceptions: array<string, string|array<int, array{start: string, end: string}>>,
+	 *   availability_offline_message: string,
+	 *   availability_online_indicator: bool
 	 * }
 	 */
 	public function get(): array {
@@ -118,7 +146,11 @@ final class Settings {
 	 *   telegram_dispatch_enabled: bool,
 	 *   widget_title: string,
 	 *   widget_greeting: string,
-	 *   widget_avatar_attachment_id: int
+	 *   widget_avatar_attachment_id: int,
+	 *   availability_schedule: array<string, array<int, array{start: string, end: string}>>,
+	 *   availability_exceptions: array<string, string|array<int, array{start: string, end: string}>>,
+	 *   availability_offline_message: string,
+	 *   availability_online_indicator: bool
 	 * }
 	 */
 	public function sanitize( $input ): array {
@@ -127,6 +159,13 @@ final class Settings {
 		if ( ! is_array( $input ) ) {
 			return $defaults;
 		}
+
+		// The previously stored option, used to preserve a valid availability
+		// config when a new submission is rejected (plan v2 §6). Guarded so
+		// the pure-PHP unit suite can still exercise `sanitize()` with no
+		// WordPress loaded.
+		$stored = function_exists( 'get_option' ) ? get_option( self::OPTION_NAME, array() ) : array();
+		$stored = is_array( $stored ) ? $stored : array();
 
 		return array(
 			'remove_data_on_uninstall'        => ! empty( $input['remove_data_on_uninstall'] ),
@@ -148,7 +187,89 @@ final class Settings {
 			'widget_avatar_attachment_id'     => array_key_exists( 'widget_avatar_attachment_id', $input )
 				? $this->image_attachment_id( $input['widget_avatar_attachment_id'] )
 				: $defaults['widget_avatar_attachment_id'],
+			'availability_schedule'           => $this->availability_config(
+				$input,
+				$stored,
+				$defaults,
+				'availability_schedule',
+				static fn( $raw ) => WeeklySchedule::from_array( $raw )->to_array(),
+				__( 'The support schedule contained an invalid time and was not saved. Your previous schedule is unchanged.', 'universal-support-chat' )
+			),
+			'availability_exceptions'         => $this->availability_config(
+				$input,
+				$stored,
+				$defaults,
+				'availability_exceptions',
+				static fn( $raw ) => ExceptionSet::from_array( $raw )->to_array(),
+				__( 'A support-hours exception was invalid and none were saved. Your previous exceptions are unchanged.', 'universal-support-chat' )
+			),
+			'availability_offline_message'    => array_key_exists( 'availability_offline_message', $input )
+				? $this->offline_message( $input['availability_offline_message'], $defaults['availability_offline_message'] )
+				: $defaults['availability_offline_message'],
+			'availability_online_indicator'   => array_key_exists( 'availability_online_indicator', $input )
+				? ! empty( $input['availability_online_indicator'] )
+				: $defaults['availability_online_indicator'],
 		);
+	}
+
+	/**
+	 * Atomic validation for an availability config key (ADR-0017; plan v2
+	 * §6). A submitted value that differs from what is stored is validated
+	 * as a whole through the given builder: on any failure the whole key is
+	 * rejected, the previously stored valid value is kept, and a
+	 * `settings_error` is registered. A value identical to what is stored
+	 * (e.g. the reparse that {@see self::get()} performs) passes straight
+	 * through untouched, so runtime corruption is surfaced by
+	 * `AvailabilityService`'s own strict parse rather than being silently
+	 * reset here.
+	 *
+	 * @param array<string, mixed>       $input    Full submitted array.
+	 * @param array<string, mixed>       $stored   Current stored option array.
+	 * @param array<string, mixed>       $defaults Default option array.
+	 * @param string                     $key      Config key.
+	 * @param callable(mixed): mixed     $build    Strict builder; throws {@see InvalidScheduleException} on bad input.
+	 * @param string                     $error    Operator-facing rejection message.
+	 *
+	 * @return mixed The normalized value, or the preserved prior value.
+	 */
+	private function availability_config( array $input, array $stored, array $defaults, string $key, callable $build, string $error ) {
+		$current = ( isset( $stored[ $key ] ) && is_array( $stored[ $key ] ) ) ? $stored[ $key ] : $defaults[ $key ];
+
+		if ( ! array_key_exists( $key, $input ) ) {
+			return $current;
+		}
+
+		$submitted = $input[ $key ];
+
+		if ( $submitted === $current ) {
+			return $current;
+		}
+
+		try {
+			return $build( is_array( $submitted ) ? $submitted : array() );
+		} catch ( InvalidScheduleException $exception ) {
+			unset( $exception );
+
+			if ( function_exists( 'add_settings_error' ) ) {
+				add_settings_error( self::OPTION_NAME, $key, $error );
+			}
+
+			return $current;
+		}
+	}
+
+	/**
+	 * Sanitizes the offline message: plain multiline text, length-capped,
+	 * never empty (a blank value falls back to the default so a visitor is
+	 * never shown an empty offline notice).
+	 *
+	 * @param mixed  $value    Raw value.
+	 * @param string $fallback Default message.
+	 */
+	private function offline_message( $value, string $fallback ): string {
+		$clean = $this->plain_multiline_text( $value, self::OFFLINE_MESSAGE_MAX );
+
+		return '' === trim( $clean ) ? $fallback : $clean;
 	}
 
 	/**

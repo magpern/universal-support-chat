@@ -36,9 +36,25 @@ final class SupportChatSettingsPage {
 
 	private const SECTION_GENERAL      = 'universal_support_chat_settings_general';
 	private const SECTION_PRESENTATION = 'universal_support_chat_settings_presentation';
+	private const SECTION_AVAILABILITY = 'universal_support_chat_settings_availability';
 	private const SECTION_LIFECYCLE    = 'universal_support_chat_settings_lifecycle';
 	private const SECTION_TELEGRAM     = 'universal_support_chat_settings_telegram';
 	private const SECTION_DATA_REMOVAL = 'universal_support_chat_settings_data_removal';
+
+	/**
+	 * Weekday storage keys, in display order.
+	 */
+	private const WEEKDAYS = array( 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun' );
+
+	/**
+	 * Interval slots offered per weekday on the form.
+	 */
+	private const SCHEDULE_SLOTS = 3;
+
+	/**
+	 * Exception rows offered on the form.
+	 */
+	private const EXCEPTION_ROWS = 5;
 
 	/**
 	 * Admin script handle for the avatar media picker (D5).
@@ -187,6 +203,44 @@ final class SupportChatSettingsPage {
 			array( $this, 'render_widget_avatar' ),
 			self::SLUG,
 			self::SECTION_PRESENTATION
+		);
+
+		add_settings_section(
+			self::SECTION_AVAILABILITY,
+			__( 'Support availability', 'universal-support-chat' ),
+			static function (): void {
+				echo '<p>' . esc_html__( 'When the support team is available, evaluated in the site timezone. Outside these hours the widget honestly shows the team as offline and a visitor can still leave a message that becomes a normal conversation. Times are 24-hour HH:MM; leave a slot blank to skip it, and leave a whole day blank to close it. An invalid time is rejected and your previous schedule is kept.', 'universal-support-chat' ) . '</p>';
+			},
+			self::SLUG
+		);
+
+		add_settings_field(
+			'availability_schedule',
+			__( 'Weekly schedule', 'universal-support-chat' ),
+			array( $this, 'render_availability_schedule' ),
+			self::SLUG,
+			self::SECTION_AVAILABILITY
+		);
+		add_settings_field(
+			'availability_exceptions',
+			__( 'Date exceptions', 'universal-support-chat' ),
+			array( $this, 'render_availability_exceptions' ),
+			self::SLUG,
+			self::SECTION_AVAILABILITY
+		);
+		add_settings_field(
+			'availability_offline_message',
+			__( 'Offline message', 'universal-support-chat' ),
+			array( $this, 'render_availability_offline_message' ),
+			self::SLUG,
+			self::SECTION_AVAILABILITY
+		);
+		add_settings_field(
+			'availability_online_indicator',
+			__( '“We’re online” indicator', 'universal-support-chat' ),
+			array( $this, 'render_availability_online_indicator' ),
+			self::SLUG,
+			self::SECTION_AVAILABILITY
 		);
 
 		add_settings_section(
@@ -356,6 +410,148 @@ final class SupportChatSettingsPage {
 		printf(
 			'<p class="description">%s</p>',
 			esc_html__( 'An optional image shown next to the title. Images only; decorative. Choose from your Media Library.', 'universal-support-chat' )
+		);
+	}
+
+	/**
+	 * Renders the weekly schedule grid. Field names build the canonical
+	 * `{ mon: [ { start, end }, … ], … }` shape that `Settings::sanitize()`
+	 * validates atomically.
+	 */
+	public function render_availability_schedule(): void {
+		$stored = $this->settings->get()['availability_schedule'];
+		$name   = Settings::OPTION_NAME . '[availability_schedule]';
+
+		$labels = array(
+			'mon' => __( 'Monday', 'universal-support-chat' ),
+			'tue' => __( 'Tuesday', 'universal-support-chat' ),
+			'wed' => __( 'Wednesday', 'universal-support-chat' ),
+			'thu' => __( 'Thursday', 'universal-support-chat' ),
+			'fri' => __( 'Friday', 'universal-support-chat' ),
+			'sat' => __( 'Saturday', 'universal-support-chat' ),
+			'sun' => __( 'Sunday', 'universal-support-chat' ),
+		);
+
+		echo '<table class="widefat striped" style="max-width:640px;"><tbody>';
+
+		foreach ( self::WEEKDAYS as $day ) {
+			$intervals = isset( $stored[ $day ] ) ? array_values( $stored[ $day ] ) : array();
+
+			echo '<tr><th scope="row" style="width:8rem;">' . esc_html( $labels[ $day ] ) . '</th><td>';
+
+			for ( $slot = 0; $slot < self::SCHEDULE_SLOTS; $slot++ ) {
+				$start = isset( $intervals[ $slot ]['start'] ) ? (string) $intervals[ $slot ]['start'] : '';
+				$end   = isset( $intervals[ $slot ]['end'] ) ? (string) $intervals[ $slot ]['end'] : '';
+
+				printf(
+					'<span style="display:inline-block;margin:0 1rem 0.35rem 0;white-space:nowrap;">'
+					. '<input type="time" aria-label="%1$s" name="%2$s[%3$s][%4$d][start]" value="%5$s" /> &ndash; '
+					. '<input type="time" aria-label="%6$s" name="%2$s[%3$s][%4$d][end]" value="%7$s" /></span>',
+					esc_attr( sprintf( /* translators: %s: weekday. */ __( '%s opening time', 'universal-support-chat' ), $labels[ $day ] ) ),
+					esc_attr( $name ),
+					esc_attr( $day ),
+					(int) $slot,
+					esc_attr( $start ),
+					esc_attr( sprintf( /* translators: %s: weekday. */ __( '%s closing time', 'universal-support-chat' ), $labels[ $day ] ) ),
+					esc_attr( $end )
+				);
+			}
+
+			echo '</td></tr>';
+		}
+
+		echo '</tbody></table>';
+	}
+
+	/**
+	 * Renders the date-exception rows. Field names build the form's row
+	 * shape (`[ { date, mode, start, end }, … ]`), converted to the
+	 * canonical date map by `ExceptionSet::from_array()`.
+	 */
+	public function render_availability_exceptions(): void {
+		$stored = $this->settings->get()['availability_exceptions'];
+		$name   = Settings::OPTION_NAME . '[availability_exceptions]';
+
+		$rows = array();
+		foreach ( $stored as $date => $value ) {
+			if ( 'closed' === $value ) {
+				$rows[] = array(
+					'date'  => (string) $date,
+					'mode'  => 'closed',
+					'start' => '',
+					'end'   => '',
+				);
+			} elseif ( isset( $value[0]['start'] ) ) {
+				$rows[] = array(
+					'date'  => (string) $date,
+					'mode'  => 'hours',
+					'start' => (string) $value[0]['start'],
+					'end'   => (string) $value[0]['end'],
+				);
+			}
+		}
+
+		echo '<table class="widefat striped" style="max-width:640px;"><thead><tr>';
+		echo '<th>' . esc_html__( 'Date', 'universal-support-chat' ) . '</th>';
+		echo '<th>' . esc_html__( 'Then', 'universal-support-chat' ) . '</th>';
+		echo '<th>' . esc_html__( 'Special hours', 'universal-support-chat' ) . '</th>';
+		echo '</tr></thead><tbody>';
+
+		for ( $i = 0; $i < self::EXCEPTION_ROWS; $i++ ) {
+			$row  = $rows[ $i ] ?? array(
+				'date'  => '',
+				'mode'  => 'closed',
+				'start' => '',
+				'end'   => '',
+			);
+			$base = $name . '[' . (int) $i . ']';
+
+			echo '<tr><td>';
+			printf( '<input type="date" name="%s[date]" value="%s" />', esc_attr( $base ), esc_attr( $row['date'] ) );
+			echo '</td><td>';
+			printf(
+				'<select name="%s[mode]"><option value="closed"%s>%s</option><option value="hours"%s>%s</option></select>',
+				esc_attr( $base ),
+				selected( $row['mode'], 'closed', false ),
+				esc_html__( 'Closed all day', 'universal-support-chat' ),
+				selected( $row['mode'], 'hours', false ),
+				esc_html__( 'Open only these hours', 'universal-support-chat' )
+			);
+			echo '</td><td>';
+			printf(
+				'<input type="time" aria-label="%s" name="%s[start]" value="%s" /> &ndash; <input type="time" aria-label="%s" name="%s[end]" value="%s" />',
+				esc_attr__( 'Exception opening time', 'universal-support-chat' ),
+				esc_attr( $base ),
+				esc_attr( $row['start'] ),
+				esc_attr__( 'Exception closing time', 'universal-support-chat' ),
+				esc_attr( $base ),
+				esc_attr( $row['end'] )
+			);
+			echo '</td></tr>';
+		}
+
+		echo '</tbody></table>';
+		printf( '<p class="description">%s</p>', esc_html__( 'A “Closed all day” exception overrides the weekly schedule for that date. “Open only these hours” replaces that date’s weekly hours. Clear a row’s date to remove it.', 'universal-support-chat' ) );
+	}
+
+	/**
+	 * Renders the offline-message textarea (plain multiline text, ≤ 500).
+	 */
+	public function render_availability_offline_message(): void {
+		$this->textarea(
+			'availability_offline_message',
+			__( 'Shown in the widget when the team is offline. Plain text; no time estimate or promise. Leave blank to use the default wording.', 'universal-support-chat' ),
+			500
+		);
+	}
+
+	/**
+	 * Renders the online-indicator checkbox with its hidden `0` companion.
+	 */
+	public function render_availability_online_indicator(): void {
+		$this->checkbox(
+			'availability_online_indicator',
+			__( 'Show a subtle “We’re online” badge in the widget header — only ever while the team is genuinely available.', 'universal-support-chat' )
 		);
 	}
 
