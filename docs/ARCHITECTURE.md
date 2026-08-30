@@ -69,7 +69,7 @@ SC-AI1 precedes SC-AI2. **SC-AI3** (AI-assisted support / RAG knowledge base) is
 
 ## Versioning conventions
 
-- Plugin SemVer: `UNIVERSAL_SUPPORT_CHAT_VERSION` — **`0.3.0`** at SC-M03 work package 0 (`0.2.0` at SC-M02, `0.1.0` at SC-M01).
+- Plugin SemVer: `UNIVERSAL_SUPPORT_CHAT_VERSION` — **`0.3.0`** at SC-M03 work package 0 (`0.2.0` at SC-M02, `0.1.0` at SC-M01); `0.7.0` at SC-M05 (ADR-0016 widget presentation); `0.8.0` at SC-M06 (ADR-0017 availability & offline tickets — asset cache-bust; no release or tag).
 - Independent integer schema version option `universal_support_chat_db_version` — target **`7`** at SC-M03 work package 0 (1=audit, 2=conversations, 3=messages, 4=notes, 5=channel peers, 6=contract nonces, 7=channel status).
 - No Contract v1 release tag is required for adapter pinning; commit SHA is sufficient.
 - SC-M03 work package 0 does not create a GitHub Release or version tag.

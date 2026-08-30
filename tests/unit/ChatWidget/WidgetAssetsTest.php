@@ -49,6 +49,30 @@ final class WidgetAssetsTest extends TestCase {
 		$this->assertStringContainsString( 'data-has-messages', $this->js() );
 	}
 
+	public function test_js_availability_is_rendered_as_plain_text_and_pill_is_honest(): void {
+		$js = $this->js();
+
+		$this->assertStringContainsString( 'function applyAvailability', $js );
+		// Offline copy and confirmation reach the DOM via .textContent only.
+		$this->assertStringContainsString( 'offlineEl.textContent', $js );
+		$this->assertStringContainsString( 'onlineEl.textContent', $js );
+		$this->assertStringNotContainsString( 'innerHTML', $js );
+		// The "online" pill is gated on a genuinely available state.
+		$this->assertMatchesRegularExpression( '/showPill\\s*=\\s*!unavailable\\s*&&/', $js );
+		// No response-time / ETA copy is baked into the script.
+		$this->assertStringNotContainsStringIgnoringCase( 'typically repl', $js );
+		$this->assertStringNotContainsStringIgnoringCase( 'response time', $js );
+		$this->assertDoesNotMatchRegularExpression( '/\\breply (in|within)\\s+\\d/i', $js );
+	}
+
+	public function test_js_refreshes_availability_from_server_responses(): void {
+		$js = $this->js();
+
+		// Availability is re-applied from the poll response and from the
+		// start / message POST responses (ADR-0017 §7).
+		$this->assertGreaterThanOrEqual( 3, substr_count( $js, 'applyAvailability(res.data.availability)' ) );
+	}
+
 	public function test_js_defers_init_until_the_shell_dom_exists(): void {
 		$js = $this->js();
 

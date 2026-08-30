@@ -370,8 +370,8 @@
 					pendingIdempotency = null;
 					applyAvailability(res.data.availability);
 					if (res.data.availability === 'unavailable') {
-						// Honest offline confirmation (ADR-0017 §9) — no ETA;
-						// sticky so the routine poll does not immediately clear it.
+						// Honest offline confirmation (ADR-0017 section 9) — no time
+						// estimate; sticky so the routine poll does not clear it.
 						setStatus(cfg.i18n.offlineConfirm || '', false, true);
 					}
 					return poll();
