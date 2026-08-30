@@ -203,7 +203,42 @@ final class AvailabilityValueObjectsTest extends TestCase {
 			'impossible calendar' => array( array( '2026-02-30' => 'closed' ) ),
 			'bad value'           => array( array( '2026-02-10' => 'open' ) ),
 			'bad interval'        => array( array( '2026-02-10' => array( array( 'start' => '9' ) ) ) ),
+			'duplicate date row'  => array(
+				array(
+					array(
+						'date' => '2026-02-10',
+						'mode' => 'closed',
+					),
+					array(
+						'date' => '2026-02-10',
+						'mode' => 'closed',
+					),
+				),
+			),
+			'unknown mode row'    => array(
+				array(
+					array(
+						'date' => '2026-02-10',
+						'mode' => 'weird',
+					),
+				),
+			),
 		);
+	}
+
+	public function test_exception_rows_round_trip_and_hours_without_times_is_a_closed_day(): void {
+		$set = ExceptionSet::from_array(
+			array(
+				array(
+					'date'  => '2026-06-19',
+					'mode'  => 'hours',
+					'start' => '',
+					'end'   => '',
+				),
+			)
+		);
+
+		$this->assertSame( array( '2026-06-19' => 'closed' ), $set->to_array() );
 	}
 
 	public function test_override_null_expiry_never_expires(): void {

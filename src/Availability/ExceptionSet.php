@@ -87,13 +87,14 @@ final class ExceptionSet {
 	 * Converts the Settings form's row shape
 	 * (`[ { date, mode, start, end }, … ]`) to the canonical date map.
 	 * Blank rows (no date) are dropped; a `hours` row with no times becomes
-	 * a `closed` day.
+	 * a `closed` day. Nothing is silently discarded: a duplicate date or an
+	 * unrecognised `mode` rejects the whole submission (plan v2 §6 review).
 	 *
 	 * @param array<int, mixed> $rows Row list.
 	 *
 	 * @return array<string, mixed>
 	 *
-	 * @throws InvalidScheduleException When a row is not an array.
+	 * @throws InvalidScheduleException When a row is malformed, a date repeats, or the mode is unknown.
 	 */
 	private static function rows_to_map( array $rows ): array {
 		$map = array();
@@ -108,7 +109,14 @@ final class ExceptionSet {
 				continue;
 			}
 
+			if ( array_key_exists( $date, $map ) ) {
+				throw new InvalidScheduleException( 'Each exception date may be listed only once.' );
+			}
+
 			$mode = isset( $row['mode'] ) ? (string) $row['mode'] : 'closed';
+			if ( 'closed' !== $mode && 'hours' !== $mode ) {
+				throw new InvalidScheduleException( 'Unknown exception mode.' );
+			}
 
 			if ( 'closed' === $mode ) {
 				$map[ $date ] = 'closed';

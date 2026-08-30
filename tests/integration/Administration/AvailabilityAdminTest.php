@@ -49,6 +49,16 @@ final class AvailabilityAdminTest extends WP_UnitTestCase {
 		return new AvailabilityService( $this->settings, new AvailabilityResolver() );
 	}
 
+	/**
+	 * @return array<int, string>
+	 */
+	private function recent_audit_actions(): array {
+		return array_map(
+			static fn( $row ) => $row['action'],
+			( new AuditLogRepository( $this->health ) )->recent( 20 )
+		);
+	}
+
 	// ---- WP3: atomic settings validation ----
 
 	public function test_valid_schedule_round_trips_to_the_canonical_map(): void {
@@ -119,6 +129,229 @@ final class AvailabilityAdminTest extends WP_UnitTestCase {
 				),
 			),
 			$after['availability_schedule']['wed']
+		);
+	}
+
+	public function test_bad_schedule_with_good_exceptions_rejects_the_whole_section(): void {
+		$good = $this->settings->sanitize(
+			array(
+				'availability_schedule'   => array(
+					'thu' => array(
+						array(
+							'start' => '09:00',
+							'end'   => '11:00',
+						),
+					),
+				),
+				'availability_exceptions' => array(),
+			)
+		);
+		update_option( Settings::OPTION_NAME, $good );
+
+		$after = $this->settings->sanitize(
+			array(
+				'availability_schedule'   => array(
+					'thu' => array(
+						array(
+							'start' => '11:00',
+							'end'   => '09:00',
+						),
+					),
+				),
+				'availability_exceptions' => array(
+					array(
+						'date' => '2026-12-24',
+						'mode' => 'closed',
+					),
+				),
+			)
+		);
+
+		// Neither half is applied — the new exception is NOT saved just
+		// because it was individually valid.
+		$this->assertSame(
+			array(
+				array(
+					'start' => '09:00',
+					'end'   => '11:00',
+				),
+			),
+			$after['availability_schedule']['thu']
+		);
+		$this->assertSame( array(), $after['availability_exceptions'] );
+	}
+
+	public function test_good_schedule_with_bad_exceptions_rejects_the_whole_section(): void {
+		$good = $this->settings->sanitize(
+			array(
+				'availability_schedule'   => array(
+					'fri' => array(
+						array(
+							'start' => '13:00',
+							'end'   => '14:00',
+						),
+					),
+				),
+				'availability_exceptions' => array(),
+			)
+		);
+		update_option( Settings::OPTION_NAME, $good );
+
+		$after = $this->settings->sanitize(
+			array(
+				'availability_schedule'   => array(
+					'fri' => array(
+						array(
+							'start' => '10:00',
+							'end'   => '12:00',
+						),
+					),
+				),
+				'availability_exceptions' => array(
+					array(
+						'date'  => '2026-12-31',
+						'mode'  => 'hours',
+						'start' => '18:00',
+						'end'   => '09:00',
+					),
+				),
+			)
+		);
+
+		// The individually-valid new schedule is NOT saved.
+		$this->assertSame(
+			array(
+				array(
+					'start' => '13:00',
+					'end'   => '14:00',
+				),
+			),
+			$after['availability_schedule']['fri']
+		);
+		$this->assertSame( array(), $after['availability_exceptions'] );
+	}
+
+	// ---- audit events ----
+	//
+	// The audit hooks live on `SupportChatSettingsPage`, which is already
+	// constructed and `register()`-ed by the plugin's own `plugins_loaded`
+	// bootstrap in this WP test install — a second instance is not created
+	// here, so these assertions exercise the real, single, live wiring.
+
+	public function test_schedule_and_exception_changes_are_audited_without_leaking_contents(): void {
+		update_option(
+			Settings::OPTION_NAME,
+			$this->settings->sanitize(
+				array(
+					'availability_schedule'   => array(
+						'mon' => array(
+							array(
+								'start' => '13:37',
+								'end'   => '14:37',
+							),
+						),
+					),
+					'availability_exceptions' => array(
+						array(
+							'date' => '2026-12-24',
+							'mode' => 'closed',
+						),
+					),
+				)
+			)
+		);
+
+		$actions = $this->recent_audit_actions();
+		$this->assertContains( 'availability.schedule_updated', $actions );
+		$this->assertContains( 'availability.exceptions_updated', $actions );
+
+		// No schedule times or exception dates in any audit context.
+		foreach ( ( new AuditLogRepository( $this->health ) )->recent( 20 ) as $row ) {
+			$this->assertStringNotContainsString( '13:37', (string) wp_json_encode( $row ) );
+			$this->assertStringNotContainsString( '2026-12-24', (string) wp_json_encode( $row ) );
+		}
+	}
+
+	public function test_a_save_that_does_not_touch_availability_is_not_audited(): void {
+		// A schedule change of its own is legitimately audited once here —
+		// captured as the "before" baseline so the assertion below is about
+		// the *next* save, not this seeding step.
+		update_option(
+			Settings::OPTION_NAME,
+			$this->settings->sanitize(
+				array(
+					'availability_schedule' => array(
+						'mon' => array(
+							array(
+								'start' => '08:00',
+								'end'   => '09:00',
+							),
+						),
+					),
+				)
+			)
+		);
+		$before = self::count_of( 'availability.schedule_updated', $this->recent_audit_actions() );
+
+		update_option(
+			Settings::OPTION_NAME,
+			$this->settings->sanitize( array( 'widget_enabled' => '0' ) )
+		);
+
+		$after = self::count_of( 'availability.schedule_updated', $this->recent_audit_actions() );
+		$this->assertSame( $before, $after, 'a save that does not touch availability must not add a new schedule_updated event' );
+		$this->assertSame( 0, self::count_of( 'availability.exceptions_updated', $this->recent_audit_actions() ) );
+	}
+
+	public function test_a_rejected_availability_save_is_not_audited(): void {
+		update_option(
+			Settings::OPTION_NAME,
+			$this->settings->sanitize(
+				array(
+					'availability_schedule' => array(
+						'tue' => array(
+							array(
+								'start' => '09:00',
+								'end'   => '10:00',
+							),
+						),
+					),
+				)
+			)
+		);
+		// Baseline AFTER the one legitimate save above — this is what the
+		// rejected save below must not add to.
+		$before = self::count_of( 'availability.schedule_updated', $this->recent_audit_actions() );
+
+		update_option(
+			Settings::OPTION_NAME,
+			$this->settings->sanitize(
+				array(
+					'availability_schedule' => array(
+						'tue' => array(
+							array(
+								'start' => '10:00',
+								'end'   => '09:00',
+							),
+						),
+					),
+				)
+			)
+		);
+
+		$after = self::count_of( 'availability.schedule_updated', $this->recent_audit_actions() );
+		$this->assertSame( $before, $after, 'a rejected (invalid) submission must not be audited as a change' );
+	}
+
+	/**
+	 * @param array<int, string> $actions Action list.
+	 */
+	private static function count_of( string $action, array $actions ): int {
+		return count(
+			array_filter(
+				$actions,
+				static fn( string $recorded ) => $recorded === $action
+			)
 		);
 	}
 

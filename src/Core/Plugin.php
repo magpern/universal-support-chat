@@ -222,7 +222,7 @@ final class Plugin {
 		$inbox  = new ConversationInboxPage( $schema_health, $conversations, $availability );
 		$detail = new ConversationDetailPage( $schema_health, $conversations, $messages, $notes );
 		( new HubPage( $inbox, $detail ) )->register();
-		( new SupportChatSettingsPage( $settings, $peers ) )->register();
+		( new SupportChatSettingsPage( $settings, $peers, $audit ) )->register();
 		( new DiagnosticsPage( $schema_health, $audit_repo, $vault, $settings, $peers, $dispatch_outbox, $availability ) )->register();
 		( new LegacySettingsRedirect() )->register();
 		( new HubActions( $schema_health, $conversations, $messages, $notes, $audit, $dispatch_enqueuer ) )->register();

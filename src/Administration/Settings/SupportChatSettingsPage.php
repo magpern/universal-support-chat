@@ -11,10 +11,12 @@ namespace UniversalSupportChat\Administration\Settings;
 
 use UniversalSupportChat\Administration\Diagnostics\DiagnosticsPage;
 use UniversalSupportChat\Administration\Hub\HubPage;
+use UniversalSupportChat\Audit\AuditLogger;
 use UniversalSupportChat\ChannelContract\Auth\PeerRecord;
 use UniversalSupportChat\ChannelContract\Auth\PeerRepository;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
 use UniversalSupportChat\Core\Configuration\Settings;
+use UniversalSupportChat\Privacy\Classification;
 use UniversalSupportChat\TelegramDispatch\TelegramDispatchService;
 
 /**
@@ -84,14 +86,23 @@ final class SupportChatSettingsPage {
 	private PeerRepository $peers;
 
 	/**
+	 * Audit logger for successful availability-config changes (ADR-0017), or null.
+	 *
+	 * @var AuditLogger|null
+	 */
+	private ?AuditLogger $audit;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Settings       $settings Settings owner.
-	 * @param PeerRepository $peers    Peer store (read-only).
+	 * @param Settings         $settings Settings owner.
+	 * @param PeerRepository   $peers    Peer store (read-only).
+	 * @param AuditLogger|null $audit    Optional audit logger.
 	 */
-	public function __construct( Settings $settings, PeerRepository $peers ) {
+	public function __construct( Settings $settings, PeerRepository $peers, ?AuditLogger $audit = null ) {
 		$this->settings = $settings;
 		$this->peers    = $peers;
+		$this->audit    = $audit;
 	}
 
 	/**
@@ -113,6 +124,68 @@ final class SupportChatSettingsPage {
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_fields' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_media_picker' ) );
+
+		// ADR-0017: record a safe INTERNAL audit event when a save actually
+		// changes the weekly schedule or the date exceptions. `updated_option`
+		// fires only on a real change; `added_option` covers the first save.
+		add_action(
+			'updated_option',
+			function ( $option, $old_value, $value ): void {
+				if ( Settings::OPTION_NAME === $option ) {
+					$this->audit_availability_changes(
+						is_array( $old_value ) ? $old_value : array(),
+						is_array( $value ) ? $value : array()
+					);
+				}
+			},
+			10,
+			3
+		);
+		add_action(
+			'added_option',
+			function ( $option, $value ): void {
+				if ( Settings::OPTION_NAME === $option ) {
+					$this->audit_availability_changes( $this->settings->defaults(), is_array( $value ) ? $value : array() );
+				}
+			},
+			10,
+			2
+		);
+	}
+
+	/**
+	 * Records `availability.schedule_updated` / `availability.exceptions_updated`
+	 * when a save changed the corresponding stored value. Context carries only
+	 * a change marker — never schedule times, exception dates, copy, or any
+	 * identifier (ADR-0017 Security and privacy impact).
+	 *
+	 * @param array<string, mixed> $old Previous option array.
+	 * @param array<string, mixed> $updated New option array.
+	 */
+	private function audit_availability_changes( array $old, array $updated ): void {
+		if ( null === $this->audit ) {
+			return;
+		}
+
+		$events = array(
+			'availability_schedule'   => 'availability.schedule_updated',
+			'availability_exceptions' => 'availability.exceptions_updated',
+		);
+
+		foreach ( $events as $key => $action ) {
+			if ( ( $old[ $key ] ?? null ) === ( $updated[ $key ] ?? null ) ) {
+				continue;
+			}
+
+			$this->audit->record(
+				$action,
+				'operator',
+				function_exists( 'get_current_user_id' ) ? get_current_user_id() : 0,
+				array( 'changed' => 'yes' ),
+				array( 'changed' => Classification::PUBLIC ),
+				Classification::INTERNAL
+			);
+		}
 	}
 
 	/**

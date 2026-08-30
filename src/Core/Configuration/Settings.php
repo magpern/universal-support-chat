@@ -167,6 +167,11 @@ final class Settings {
 		$stored = function_exists( 'get_option' ) ? get_option( self::OPTION_NAME, array() ) : array();
 		$stored = is_array( $stored ) ? $stored : array();
 
+		// The schedule + exceptions are validated as ONE all-or-nothing
+		// Availability section (ADR-0017; plan v2 §6): if either fails, both
+		// prior values are preserved and one settings error is raised.
+		$availability = $this->sanitize_availability_section( $input, $stored, $defaults );
+
 		return array(
 			'remove_data_on_uninstall'        => ! empty( $input['remove_data_on_uninstall'] ),
 			'conversation_inactive_days'      => $this->positive_int( $input['conversation_inactive_days'] ?? null, $defaults['conversation_inactive_days'] ),
@@ -187,22 +192,8 @@ final class Settings {
 			'widget_avatar_attachment_id'     => array_key_exists( 'widget_avatar_attachment_id', $input )
 				? $this->image_attachment_id( $input['widget_avatar_attachment_id'] )
 				: $defaults['widget_avatar_attachment_id'],
-			'availability_schedule'           => $this->availability_config(
-				$input,
-				$stored,
-				$defaults,
-				'availability_schedule',
-				static fn( $raw ) => WeeklySchedule::from_array( $raw )->to_array(),
-				__( 'The support schedule contained an invalid time and was not saved. Your previous schedule is unchanged.', 'universal-support-chat' )
-			),
-			'availability_exceptions'         => $this->availability_config(
-				$input,
-				$stored,
-				$defaults,
-				'availability_exceptions',
-				static fn( $raw ) => ExceptionSet::from_array( $raw )->to_array(),
-				__( 'A support-hours exception was invalid and none were saved. Your previous exceptions are unchanged.', 'universal-support-chat' )
-			),
+			'availability_schedule'           => $availability['schedule'],
+			'availability_exceptions'         => $availability['exceptions'],
 			'availability_offline_message'    => array_key_exists( 'availability_offline_message', $input )
 				? $this->offline_message( $input['availability_offline_message'], $defaults['availability_offline_message'] )
 				: $defaults['availability_offline_message'],
@@ -213,48 +204,67 @@ final class Settings {
 	}
 
 	/**
-	 * Atomic validation for an availability config key (ADR-0017; plan v2
-	 * §6). A submitted value that differs from what is stored is validated
-	 * as a whole through the given builder: on any failure the whole key is
-	 * rejected, the previously stored valid value is kept, and a
-	 * `settings_error` is registered. A value identical to what is stored
-	 * (e.g. the reparse that {@see self::get()} performs) passes straight
-	 * through untouched, so runtime corruption is surfaced by
-	 * `AvailabilityService`'s own strict parse rather than being silently
-	 * reset here.
+	 * All-or-nothing validation of the Availability section — the weekly
+	 * schedule and the date exceptions together (ADR-0017; plan v2 §6).
 	 *
-	 * @param array<string, mixed>       $input    Full submitted array.
-	 * @param array<string, mixed>       $stored   Current stored option array.
-	 * @param array<string, mixed>       $defaults Default option array.
-	 * @param string                     $key      Config key.
-	 * @param callable(mixed): mixed     $build    Strict builder; throws {@see InvalidScheduleException} on bad input.
-	 * @param string                     $error    Operator-facing rejection message.
+	 * If EITHER the schedule or the exceptions fails to parse, BOTH prior
+	 * values are preserved and exactly one `settings_error` is registered —
+	 * a partial save (new exceptions kept, old schedule kept, or vice versa)
+	 * is impossible. A section identical to what is stored (e.g. the reparse
+	 * {@see self::get()} performs) passes straight through untouched, so
+	 * runtime corruption is surfaced by `AvailabilityService`'s own strict
+	 * parse rather than being silently reset here.
 	 *
-	 * @return mixed The normalized value, or the preserved prior value.
+	 * @param array<string, mixed> $input    Full submitted array.
+	 * @param array<string, mixed> $stored   Current stored option array.
+	 * @param array<string, mixed> $defaults Default option array.
+	 *
+	 * @return array{schedule: mixed, exceptions: mixed}
 	 */
-	private function availability_config( array $input, array $stored, array $defaults, string $key, callable $build, string $error ) {
-		$current = ( isset( $stored[ $key ] ) && is_array( $stored[ $key ] ) ) ? $stored[ $key ] : $defaults[ $key ];
+	private function sanitize_availability_section( array $input, array $stored, array $defaults ): array {
+		$current_schedule   = ( isset( $stored['availability_schedule'] ) && is_array( $stored['availability_schedule'] ) )
+			? $stored['availability_schedule']
+			: $defaults['availability_schedule'];
+		$current_exceptions = ( isset( $stored['availability_exceptions'] ) && is_array( $stored['availability_exceptions'] ) )
+			? $stored['availability_exceptions']
+			: $defaults['availability_exceptions'];
 
-		if ( ! array_key_exists( $key, $input ) ) {
-			return $current;
+		$preserved = array(
+			'schedule'   => $current_schedule,
+			'exceptions' => $current_exceptions,
+		);
+
+		$has_schedule   = array_key_exists( 'availability_schedule', $input );
+		$has_exceptions = array_key_exists( 'availability_exceptions', $input );
+
+		if ( ! $has_schedule && ! $has_exceptions ) {
+			return $preserved;
 		}
 
-		$submitted = $input[ $key ];
+		$submitted_schedule   = $has_schedule ? $input['availability_schedule'] : $current_schedule;
+		$submitted_exceptions = $has_exceptions ? $input['availability_exceptions'] : $current_exceptions;
 
-		if ( $submitted === $current ) {
-			return $current;
+		if ( $submitted_schedule === $current_schedule && $submitted_exceptions === $current_exceptions ) {
+			return $preserved;
 		}
 
 		try {
-			return $build( is_array( $submitted ) ? $submitted : array() );
+			return array(
+				'schedule'   => WeeklySchedule::from_array( is_array( $submitted_schedule ) ? $submitted_schedule : array() )->to_array(),
+				'exceptions' => ExceptionSet::from_array( is_array( $submitted_exceptions ) ? $submitted_exceptions : array() )->to_array(),
+			);
 		} catch ( InvalidScheduleException $exception ) {
 			unset( $exception );
 
 			if ( function_exists( 'add_settings_error' ) ) {
-				add_settings_error( self::OPTION_NAME, $key, $error );
+				add_settings_error(
+					self::OPTION_NAME,
+					'availability_section',
+					__( 'The support schedule or a date exception contained an invalid value, so the whole Availability section was not saved. Your previous support hours and exceptions are unchanged.', 'universal-support-chat' )
+				);
 			}
 
-			return $current;
+			return $preserved;
 		}
 	}
 
