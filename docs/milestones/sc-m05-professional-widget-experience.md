@@ -2,7 +2,13 @@
 
 ## Status
 
-Planned
+Closed (PASS WITH LIMITATIONS) — implementation [PR #48](https://github.com/magpern/universal-support-chat/pull/48)
+squash-merged to `main` at `ceb5284fe51c1f37a52895b4f43ed422376ef902`; closure
+[`docs/closure/sc-m05-professional-widget-experience-closure.md`](../closure/sc-m05-professional-widget-experience-closure.md).
+Merged, not deployed. Limitation: the plan §9 VoiceOver/NVDA screen-reader smoke was not run
+in this environment and is **not** claimed as passed — it is a post-merge recommended human
+AT validation (checklist:
+<https://github.com/magpern/universal-support-chat/pull/48#issuecomment-5469273912>).
 
 Depends on: SC-M02
 

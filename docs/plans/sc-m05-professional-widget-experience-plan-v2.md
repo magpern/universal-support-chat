@@ -22,6 +22,14 @@ package (this plan + ADR-0016 as Proposed) merged to `main` at
 acceptance record merges; the implementation branch and PR must cite both that freeze commit and
 the acceptance record's merge commit. The frozen technical content below is unchanged.
 
+**Implementation complete** — [PR #48](https://github.com/magpern/universal-support-chat/pull/48)
+squash-merged to `main` at `ceb5284fe51c1f37a52895b4f43ed422376ef902` (cites freeze
+`76c5113` and PO acceptance `a2708f6`). Closure:
+[`docs/closure/sc-m05-professional-widget-experience-closure.md`](../closure/sc-m05-professional-widget-experience-closure.md)
+— **Closed (PASS WITH LIMITATIONS)**; merged, not deployed. The one open item is the §9
+VoiceOver/NVDA screen-reader smoke, recorded as a post-merge recommended human AT validation
+(not claimed passed; axe/Lighthouse are not a substitute).
+
 ---
 
 ## 1. Charter and ADR references
