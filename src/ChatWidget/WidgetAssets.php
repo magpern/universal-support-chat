@@ -14,8 +14,14 @@ use UniversalSupportChat\Core\Configuration\Settings;
 use UniversalSupportChat\Persistence\SchemaHealth;
 
 /**
- * Minimal accessible launcher/panel. Authenticated visitors use REST;
- * logged-out visitors get a truthful sign-in prompt only.
+ * Professional accessible launcher/panel (SC-M05). Authenticated visitors
+ * use REST; logged-out visitors get a truthful sign-in prompt only.
+ *
+ * The panel is a non-modal `role="dialog"` (ADR-0016 / plan v2 D8): no
+ * `aria-modal`, no Tab focus trap. Operator-authored presentation text
+ * (title, greeting) is plain text only — the title is server-escaped with
+ * `esc_html()`, the greeting is delivered as a raw string and rendered by
+ * the widget script with `.textContent`. No widget code path uses innerHTML.
  */
 final class WidgetAssets {
 
@@ -80,7 +86,8 @@ final class WidgetAssets {
 			true
 		);
 
-		$logged_in = is_user_logged_in();
+		$logged_in    = is_user_logged_in();
+		$presentation = new WidgetPresentation( $settings );
 
 		wp_localize_script(
 			'universal-support-chat-widget',
@@ -92,6 +99,11 @@ final class WidgetAssets {
 				'schemaOk'     => $this->schema_health->is_available(),
 				'loginUrl'     => esc_url_raw( wp_login_url( get_permalink() ? (string) get_permalink() : home_url( '/' ) ) ),
 				'pollInterval' => 4000,
+				// Operator-authored greeting: a raw plain-text string, rendered
+				// by the widget script with `.textContent` (ADR-0016). The
+				// resolved title and the avatar URL are deliberately NOT in
+				// this payload — both are rendered server-side only.
+				'greeting'     => $presentation->greeting(),
 				'i18n'         => array(
 					'open'             => __( 'Open support chat', 'universal-support-chat' ),
 					'close'            => __( 'Close support chat', 'universal-support-chat' ),
@@ -101,6 +113,7 @@ final class WidgetAssets {
 					'placeholder'      => __( 'Type a message…', 'universal-support-chat' ),
 					'send'             => __( 'Send', 'universal-support-chat' ),
 					'sending'          => __( 'Sending…', 'universal-support-chat' ),
+					'loading'          => __( 'Connecting…', 'universal-support-chat' ),
 					'you'              => __( 'You', 'universal-support-chat' ),
 					'supportTeam'      => __( 'Support team', 'universal-support-chat' ),
 					'errorGeneric'     => __( 'Something went wrong. Please try again.', 'universal-support-chat' ),
@@ -125,15 +138,31 @@ final class WidgetAssets {
 			return;
 		}
 
+		$presentation = new WidgetPresentation( $settings );
+		$title        = $presentation->title();
+		$avatar_url   = $presentation->avatar_image_url();
+		$close_label  = __( 'Close support chat', 'universal-support-chat' );
+
 		echo '<div id="usc-chat-root" class="usc-chat" data-usc-chat-root hidden>';
-		echo '<button type="button" class="usc-chat__launcher" id="usc-chat-launcher" aria-expanded="false" aria-controls="usc-chat-panel">';
-		echo esc_html__( 'Chat', 'universal-support-chat' );
+
+		echo '<button type="button" class="usc-chat__launcher" id="usc-chat-launcher" aria-expanded="false" aria-haspopup="dialog" aria-controls="usc-chat-panel">';
+		echo self::icon_bubble(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static original inline SVG, no dynamic data.
+		echo self::icon_close(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static original inline SVG, no dynamic data.
 		echo '</button>';
-		echo '<div id="usc-chat-panel" class="usc-chat__panel" role="dialog" aria-modal="true" aria-labelledby="usc-chat-title" hidden>';
+
+		echo '<div id="usc-chat-panel" class="usc-chat__panel" role="dialog" aria-labelledby="usc-chat-title" aria-describedby="usc-chat-intro" hidden>';
+
 		echo '<div class="usc-chat__header">';
-		echo '<h2 id="usc-chat-title" class="usc-chat__title">' . esc_html__( 'Support chat', 'universal-support-chat' ) . '</h2>';
-		echo '<button type="button" class="usc-chat__close" id="usc-chat-close">' . esc_html__( 'Close', 'universal-support-chat' ) . '</button>';
+		if ( '' !== $avatar_url ) {
+			echo '<img class="usc-chat__avatar" alt="" src="' . esc_url( $avatar_url ) . '" width="28" height="28" />';
+		}
+		echo '<h2 id="usc-chat-title" class="usc-chat__title">' . esc_html( $title ) . '</h2>';
+		echo '<button type="button" class="usc-chat__close" id="usc-chat-close" aria-label="' . esc_attr( $close_label ) . '">';
+		echo self::icon_close(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static original inline SVG, no dynamic data.
+		echo '</button>';
 		echo '</div>';
+
+		echo '<div id="usc-chat-intro" class="usc-chat__intro"></div>';
 		echo '<div id="usc-chat-status" class="usc-chat__status" role="status" aria-live="polite"></div>';
 		echo '<div id="usc-chat-messages" class="usc-chat__messages" role="log" aria-live="polite" aria-relevant="additions"></div>';
 		echo '<form id="usc-chat-form" class="usc-chat__form" hidden>';
@@ -143,5 +172,23 @@ final class WidgetAssets {
 		echo '</form>';
 		echo '<div id="usc-chat-signin" class="usc-chat__signin" hidden></div>';
 		echo '</div></div>';
+	}
+
+	/**
+	 * Original inline speech-bubble glyph shown on the closed launcher.
+	 */
+	private static function icon_bubble(): string {
+		return '<svg class="usc-chat__icon" data-usc-icon="bubble" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
+			. '<path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-5 4V6a1 1 0 0 1 1-1Z" />'
+			. '</svg>';
+	}
+
+	/**
+	 * Original inline X glyph shown on the open launcher and the close button.
+	 */
+	private static function icon_close(): string {
+		return '<svg class="usc-chat__icon" data-usc-icon="close" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
+			. '<path d="M6 6l12 12M18 6 6 18" />'
+			. '</svg>';
 	}
 }

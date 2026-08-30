@@ -157,6 +157,75 @@ final class SupportChatSettingsPageTest extends WP_UnitTestCase {
 		}
 	}
 
+	// ---- SC-M05: Widget presentation section (ADR-0016) ----
+
+	public function test_widget_presentation_section_is_registered(): void {
+		global $wp_settings_sections;
+
+		$this->as_manager();
+		$this->page()->register_fields();
+
+		$this->assertArrayHasKey(
+			'universal_support_chat_settings_presentation',
+			$wp_settings_sections[ SupportChatSettingsPage::SLUG ]
+		);
+		$this->assertSame(
+			'Widget presentation',
+			$wp_settings_sections[ SupportChatSettingsPage::SLUG ]['universal_support_chat_settings_presentation']['title']
+		);
+	}
+
+	public function test_presentation_fields_render_as_the_right_controls(): void {
+		$html = $this->render();
+
+		$this->assertMatchesRegularExpression(
+			'/<input type="text"[^>]*maxlength="80"[^>]*name="' . preg_quote( Settings::OPTION_NAME . '[widget_title]', '/' ) . '"/',
+			$html
+		);
+		$this->assertMatchesRegularExpression(
+			'/<textarea[^>]*maxlength="500"[^>]*name="' . preg_quote( Settings::OPTION_NAME . '[widget_greeting]', '/' ) . '"/',
+			$html
+		);
+		$this->assertStringContainsString(
+			'<input type="hidden" id="usc-widget-avatar-id" name="' . Settings::OPTION_NAME . '[widget_avatar_attachment_id]"',
+			$html
+		);
+		$this->assertStringContainsString( 'id="usc-widget-avatar-choose"', $html );
+		$this->assertStringContainsString( 'id="usc-widget-avatar-remove"', $html );
+	}
+
+	public function test_greeting_default_is_shown_when_unset(): void {
+		$this->assertStringContainsString( 'Hi — how can we help?', $this->render() );
+	}
+
+	public function test_script_in_title_round_trips_escaped_into_the_field_value(): void {
+		$saved = $this->settings->sanitize( array( 'widget_title' => '<script>alert(1)</script>Team' ) );
+		update_option( Settings::OPTION_NAME, $saved + $this->settings->defaults() );
+
+		$html = $this->render();
+
+		$this->assertStringContainsString( 'value="Team"', $html );
+		$this->assertStringNotContainsString( '<script>alert(1)</script>', $html );
+	}
+
+	public function test_media_picker_loads_only_on_the_settings_page_hook(): void {
+		$this->as_manager();
+		$page = $this->page();
+		$page->add_menu();
+
+		$prop = new \ReflectionProperty( SupportChatSettingsPage::class, 'hook_suffix' );
+		$prop->setAccessible( true );
+		$hook = (string) $prop->getValue( $page );
+		$this->assertNotSame( '', $hook );
+
+		$page->enqueue_media_picker( 'index.php' );
+		$this->assertFalse( wp_script_is( 'universal-support-chat-settings-media', 'enqueued' ) );
+
+		$page->enqueue_media_picker( $hook );
+		$this->assertTrue( wp_script_is( 'universal-support-chat-settings-media', 'enqueued' ) );
+		$this->assertTrue( wp_script_is( 'media-editor', 'enqueued' ) );
+	}
+
 	public function test_every_checkbox_has_a_hidden_zero_companion(): void {
 		$html = $this->render();
 

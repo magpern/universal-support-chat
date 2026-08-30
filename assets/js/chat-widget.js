@@ -15,12 +15,26 @@
 	var launcher = document.getElementById('usc-chat-launcher');
 	var panel = document.getElementById('usc-chat-panel');
 	var closeBtn = document.getElementById('usc-chat-close');
+	var introEl = document.getElementById('usc-chat-intro');
 	var statusEl = document.getElementById('usc-chat-status');
 	var messagesEl = document.getElementById('usc-chat-messages');
 	var form = document.getElementById('usc-chat-form');
 	var input = document.getElementById('usc-chat-input');
 	var sendBtn = document.getElementById('usc-chat-send');
 	var signinEl = document.getElementById('usc-chat-signin');
+
+	// Operator greeting: set once during init, before the panel can open, so
+	// aria-describedby="usc-chat-intro" resolves to real text the moment
+	// focus enters the dialog. Plain text only (ADR-0016) via .textContent.
+	if (introEl) {
+		introEl.textContent = cfg.greeting || '';
+	}
+
+	function markHasMessages() {
+		if (messagesEl && messagesEl.childNodes.length) {
+			root.setAttribute('data-has-messages', '');
+		}
+	}
 
 	var conversationUuid = null;
 	var lastMessageId = 0;
@@ -42,6 +56,7 @@
 		while (messagesEl.firstChild) {
 			messagesEl.removeChild(messagesEl.firstChild);
 		}
+		root.removeAttribute('data-has-messages');
 	}
 
 	function appendMessage(msg) {
@@ -63,6 +78,7 @@
 		wrap.appendChild(text);
 		messagesEl.appendChild(wrap);
 		messagesEl.scrollTop = messagesEl.scrollHeight;
+		markHasMessages();
 
 		if (msg.id && msg.id > lastMessageId) {
 			lastMessageId = msg.id;
@@ -172,6 +188,14 @@
 		launcher.setAttribute('aria-expanded', 'true');
 		launcher.setAttribute('aria-label', cfg.i18n.close);
 
+		// Non-modal dialog (ADR-0016 D8): move focus into the panel now, to
+		// the close button, before the async conversation bootstrap — never
+		// onto a hidden or detached node. No focus trap: keyboard focus may
+		// leave the panel to the page as normal.
+		if (closeBtn) {
+			closeBtn.focus();
+		}
+
 		if (!cfg.loggedIn) {
 			form.hidden = true;
 			signinEl.hidden = false;
@@ -199,6 +223,8 @@
 		form.hidden = false;
 		input.placeholder = cfg.i18n.placeholder;
 		sendBtn.textContent = cfg.i18n.send;
+		sendBtn.disabled = true;
+		setStatus(cfg.i18n.loading || '', false);
 
 		ensureConversation()
 			.then(function () {
@@ -207,6 +233,7 @@
 				return poll();
 			})
 			.then(function () {
+				sendBtn.disabled = false;
 				if (!messagesEl.childNodes.length) {
 					setStatus(cfg.i18n.empty, false);
 				}
@@ -214,6 +241,7 @@
 				input.focus();
 			})
 			.catch(function (err) {
+				sendBtn.disabled = false;
 				setStatus(err && err.message ? err.message : cfg.i18n.errorGeneric, true);
 			});
 	}
