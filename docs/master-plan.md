@@ -77,7 +77,7 @@ A human request **always** creates a durable Support Chat ticket with truthful o
 | 5 | [SC-M03](milestones/sc-m03-controlled-migration-and-cutover.md) | Authenticated Contract server (ADR-0007), then quiesced one-shot migration; bindings for existing topics | ADR-0004, ADR-0007 |
 | 6 | [SC-M04](milestones/sc-m04-telegram-optional-acceptance.md) | Prove SC with adapter absent/unavailable | R1, R7 |
 | 7 | [SC-M05](milestones/sc-m05-professional-widget-experience.md) | Professional launcher and greeting | R2, R3 |
-| 8 | [SC-M06](milestones/sc-m06-support-availability-and-offline-tickets.md) | Hours, status, offline tickets | R5, R7 |
+| 8 | [SC-M06](milestones/sc-m06-support-availability-and-offline-tickets.md) | Hours, status, offline tickets ([ADR-0017](adr/0017-support-availability-authority-and-honest-offline-behaviour.md)) | R5, R7 |
 | 9 | [SC-AI1](milestones/sc-ai1-operator-ai-drafts-approve-and-send.md) | Operator drafts + Approve and send as *Support team* | Safety before autonomy |
 | 10 | [SC-AI2](milestones/sc-ai2-controlled-direct-ai-responses.md) | Direct AI as *AI assistant* | R4, R6 |
 | 11 | [SC-AI3](milestones/sc-ai3-ai-assisted-support-and-rag.md) | **Future / not implemented.** AI-assisted support / RAG knowledge base — grounded, traceable, site-scoped source corpus for SC-AI1/SC-AI2. Own ADR, plan, PO approval, evaluation, and privacy/security review required. | R4, R6 |

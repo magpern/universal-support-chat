@@ -33,6 +33,17 @@ Own support schedule, exceptions, manual `Automatic / Online / Offline`, waiting
 - Hub manages waiting conversations.
 - With adapter connected, notify may occur without being on the ticket-creation critical path.
 
+## Governing ADR
+
+[ADR-0017 — Support availability authority, and honest offline / offline-ticket behaviour](../adr/0017-support-availability-authority-and-honest-offline-behaviour.md)
+(**Proposed** in the SC-M06 freeze) — Support Chat is the sole availability authority;
+site-timezone evaluation; precedence `manual override → date exception → weekly schedule →
+fail-safe unavailable`; visitor-copy honesty; offline ticket = existing authenticated
+conversation committed atomically to `waiting_for_operator`.
+
 ## Frozen plan
 
+[sc-m06-support-availability-and-offline-tickets-plan-v2.md](../plans/sc-m06-support-availability-and-offline-tickets-plan-v2.md)
+— current, implementation-ready. Supersedes
 [sc-m06-support-availability-and-offline-tickets-plan-v1.md](../plans/sc-m06-support-availability-and-offline-tickets-plan-v1.md)
+(the original product-boundary stub, retained unedited).
