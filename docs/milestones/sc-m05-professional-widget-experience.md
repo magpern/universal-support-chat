@@ -5,9 +5,18 @@
 Closed (PASS WITH LIMITATIONS) — implementation [PR #48](https://github.com/magpern/universal-support-chat/pull/48)
 squash-merged to `main` at `ceb5284fe51c1f37a52895b4f43ed422376ef902`; closure
 [`docs/closure/sc-m05-professional-widget-experience-closure.md`](../closure/sc-m05-professional-widget-experience-closure.md).
-Merged, not deployed. Limitation: the plan §9 VoiceOver/NVDA screen-reader smoke was not run
-in this environment and is **not** claimed as passed — it is a post-merge recommended human
-AT validation (checklist:
+Closed by [PR #49](https://github.com/magpern/universal-support-chat/pull/49) at
+`b3bc9d9b3d1c370324455535dc29bd4c0a79390d`.
+
+**DEV deployed and Product Owner accepted** — see
+[`docs/closure/sc-m05-dev-deployment-acceptance.md`](../closure/sc-m05-dev-deployment-acceptance.md).
+DEV checkout `main` @ `b3bc9d9` through the existing bind mount; loaded plugin version
+`0.7.0`; `universal_support_chat_db_version` `12`; homepage / wp-admin health checks passed
+with no new web-container PHP warnings/fatals; Telegram dispatch setting and active peer
+verified unchanged, no Telegram traffic. Production untouched; no release or tag.
+
+Limitation: the plan §9 VoiceOver/NVDA screen-reader smoke was not run and is **not** claimed
+as passed — it is a recommended follow-up (checklist:
 <https://github.com/magpern/universal-support-chat/pull/48#issuecomment-5469273912>).
 
 Depends on: SC-M02
