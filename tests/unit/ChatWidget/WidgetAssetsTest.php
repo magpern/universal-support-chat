@@ -49,6 +49,18 @@ final class WidgetAssetsTest extends TestCase {
 		$this->assertStringContainsString( 'data-has-messages', $this->js() );
 	}
 
+	public function test_js_defers_init_until_the_shell_dom_exists(): void {
+		$js = $this->js();
+
+		// The shell prints on wp_footer priority 30, after footer scripts —
+		// init must wait for DOMContentLoaded when the document is still
+		// parsing, otherwise getElementById('usc-chat-root') is null.
+		$this->assertMatchesRegularExpression(
+			"/document\\.readyState === 'loading'\\s*\\)\\s*\\{\\s*document\\.addEventListener\\('DOMContentLoaded', init\\);\\s*\\}\\s*else\\s*\\{\\s*init\\(\\);/s",
+			$js
+		);
+	}
+
 	public function test_js_moves_focus_into_panel_on_open_and_back_to_launcher_on_close(): void {
 		$js = $this->js();
 
@@ -57,6 +69,22 @@ final class WidgetAssetsTest extends TestCase {
 
 		$this->assertStringContainsString( 'closeBtn.focus()', $open );
 		$this->assertStringContainsString( 'launcher.focus()', $close );
+	}
+
+	public function test_js_open_bootstrap_cannot_steal_focus_after_close(): void {
+		$js = $this->js();
+
+		// closePanel() invalidates any in-flight open bootstrap.
+		$close = substr( $js, (int) strpos( $js, 'function closePanel' ), (int) strpos( $js, 'function togglePanel' ) - (int) strpos( $js, 'function closePanel' ) );
+		$this->assertStringContainsString( 'openSession += 1', $close );
+
+		// The post-bootstrap .then() that calls input.focus() must bail when
+		// the session changed or the panel is no longer open.
+		$open = substr( $js, (int) strpos( $js, 'function openPanel' ), (int) strpos( $js, 'function closePanel' ) - (int) strpos( $js, 'function openPanel' ) );
+		$this->assertMatchesRegularExpression(
+			'/if \(session !== openSession \|\| !open\) \{\s*return;\s*\}\s*sendBtn\.disabled = false;.*input\.focus\(\);/s',
+			$open
+		);
 	}
 
 	public function test_js_adds_no_tab_focus_trap(): void {

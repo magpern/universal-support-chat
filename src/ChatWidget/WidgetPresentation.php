@@ -9,6 +9,8 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\ChatWidget;
 
+use UniversalSupportChat\Core\Configuration\Settings;
+
 /**
  * Resolves the operator-configured widget title, greeting, and optional
  * avatar image URL from a sanitized `Settings` array, keeping `WidgetAssets`
@@ -91,10 +93,17 @@ final class WidgetPresentation {
 	}
 
 	/**
-	 * The raw greeting string (delivered to the widget script and rendered
-	 * with `.textContent`).
+	 * The greeting string delivered to the widget script and rendered with
+	 * `.textContent`. When the operator has not customised it (the stored
+	 * value is still the default), it is translated at render time —
+	 * `Settings::defaults()` keeps a plain literal because it runs too early
+	 * to translate.
 	 */
 	public function greeting(): string {
+		if ( Settings::DEFAULT_WIDGET_GREETING === $this->greeting ) {
+			return __( 'Hi — how can we help?', 'universal-support-chat' );
+		}
+
 		return $this->greeting;
 	}
 

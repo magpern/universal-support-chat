@@ -28,6 +28,14 @@ final class Settings {
 	private const WIDGET_GREETING_MAX = 500;
 
 	/**
+	 * Default widget greeting (ADR-0016). Kept as a plain literal — like
+	 * every other default in this class — because `register()` runs on
+	 * `plugins_loaded`, before translations may be loaded; the string is
+	 * still translator-visible where it is rendered.
+	 */
+	public const DEFAULT_WIDGET_GREETING = 'Hi — how can we help?';
+
+	/**
 	 * Registers the option with the Settings API.
 	 */
 	public function register(): void {
@@ -66,7 +74,7 @@ final class Settings {
 			'widget_enabled'                  => true,
 			'telegram_dispatch_enabled'       => false,
 			'widget_title'                    => '',
-			'widget_greeting'                 => __( 'Hi — how can we help?', 'universal-support-chat' ),
+			'widget_greeting'                 => self::DEFAULT_WIDGET_GREETING,
 			'widget_avatar_attachment_id'     => 0,
 		);
 	}
@@ -207,9 +215,11 @@ final class Settings {
 			return 0;
 		}
 
-		$id = absint( $value );
+		// Reject non-positive values (including negatives) BEFORE absint(),
+		// so `-5` never becomes attachment `5` (ADR-0016).
+		$id = (int) $value;
 
-		if ( $id <= 0 ) {
+		if ( $id < 1 ) {
 			return 0;
 		}
 

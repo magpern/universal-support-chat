@@ -49,4 +49,20 @@ final class SettingsAvatarValidationTest extends WP_UnitTestCase {
 
 		$this->assertSame( $attachment_id, $result['widget_avatar_attachment_id'] );
 	}
+
+	/**
+	 * Regression: a negative id whose absolute value IS a real image
+	 * attachment must still become 0 — never the absint()-flipped positive.
+	 */
+	public function test_negative_of_a_real_image_attachment_id_becomes_zero(): void {
+		$attachment_id = self::factory()->attachment->create_upload_object( DIR_TESTDATA . '/images/canola.jpg' );
+		$this->assertTrue( wp_attachment_is_image( $attachment_id ) );
+
+		$result = $this->settings->sanitize( array( 'widget_avatar_attachment_id' => -$attachment_id ) );
+
+		$this->assertSame( 0, $result['widget_avatar_attachment_id'] );
+
+		$result_string = $this->settings->sanitize( array( 'widget_avatar_attachment_id' => (string) ( -$attachment_id ) ) );
+		$this->assertSame( 0, $result_string['widget_avatar_attachment_id'] );
+	}
 }
