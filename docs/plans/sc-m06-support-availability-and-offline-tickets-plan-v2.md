@@ -7,6 +7,12 @@
 > (**Proposed** in the same freeze). Per `docs/governance.md`, implementation begins only
 > after a separate Product Owner implementation-acceptance record is merged and ADR-0017 is
 > **Accepted**. Implementation reports cite this plan's freeze commit SHA.
+>
+> **Implementation authorized** — Product Owner implementation acceptance
+> [`docs/decisions/sc-adr-0017-availability-po-acceptance.md`](../decisions/sc-adr-0017-availability-po-acceptance.md)
+> (2026-08-30) authorizes implementation of WP1–WP8 exactly as frozen at
+> `cdfcd5ada3de635365d9051c42b6b7da80c82b16` (PR #51), and no scope beyond it. The frozen
+> technical content of this plan is unchanged by that note.
 
 ## 1. References
 
