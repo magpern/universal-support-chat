@@ -2,12 +2,14 @@
 
 ## Status
 
-**Proposed** — 2026-08-30. Introduced for [SC-M05 — Professional Widget Experience](../milestones/sc-m05-professional-widget-experience.md)
-and its plan [sc-m05-professional-widget-experience-plan-v2.md](../plans/sc-m05-professional-widget-experience-plan-v2.md).
-Following the ADR-0015 sequence, this ADR is merged **Proposed** in the SC-M05 documentation
-freeze; a later, separate Product Owner acceptance record
-(`docs/decisions/sc-adr-0016-widget-presentation-po-acceptance.md`) will change only this
-Status line to **Accepted**, and implementation begins only after that acceptance merges.
+**Accepted** — 2026-08-30, per Product Owner implementation acceptance
+[`docs/decisions/sc-adr-0016-widget-presentation-po-acceptance.md`](../decisions/sc-adr-0016-widget-presentation-po-acceptance.md).
+Introduced for [SC-M05 — Professional Widget Experience](../milestones/sc-m05-professional-widget-experience.md)
+and its plan [sc-m05-professional-widget-experience-plan-v2.md](../plans/sc-m05-professional-widget-experience-plan-v2.md);
+merged as **Proposed** in the SC-M05 documentation freeze on `main` at
+`76c5113db456e2586436dab73f2138be4e93dff6` (PR #46). Implementation is authorized — from the
+merged freeze baseline, exactly within the frozen scope of this ADR and plan v2 — by the
+acceptance record cited above; implementation begins only after that record merges.
 
 ## Context
 
