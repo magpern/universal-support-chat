@@ -22,6 +22,95 @@ final class SettingsTest extends TestCase {
 		$this->assertFalse( $defaults['telegram_dispatch_enabled'] );
 	}
 
+	public function test_defaults_include_the_three_widget_presentation_keys(): void {
+		$defaults = ( new Settings() )->defaults();
+
+		$this->assertCount( 9, $defaults );
+		$this->assertSame( '', $defaults['widget_title'] );
+		$this->assertSame( 'Hi — how can we help?', $defaults['widget_greeting'] );
+		$this->assertSame( 0, $defaults['widget_avatar_attachment_id'] );
+	}
+
+	public function test_sanitize_is_fixed_shape_at_nine_keys_and_drops_unknown(): void {
+		$result = ( new Settings() )->sanitize(
+			array(
+				'nope'         => 'x',
+				'widget_title' => 'Hi',
+			)
+		);
+
+		$this->assertCount( 9, $result );
+		$this->assertArrayNotHasKey( 'nope', $result );
+		$this->assertSame(
+			array(
+				'remove_data_on_uninstall',
+				'conversation_inactive_days',
+				'conversation_archived_body_days',
+				'conversation_purge_days',
+				'widget_enabled',
+				'telegram_dispatch_enabled',
+				'widget_title',
+				'widget_greeting',
+				'widget_avatar_attachment_id',
+			),
+			array_keys( $result )
+		);
+	}
+
+	public function test_sanitize_empty_array_yields_all_nine_defaults(): void {
+		$result   = ( new Settings() )->sanitize( array() );
+		$defaults = ( new Settings() )->defaults();
+
+		$this->assertSame( $defaults, $result );
+	}
+
+	public function test_widget_title_is_tag_stripped_and_capped_at_80(): void {
+		$settings = new Settings();
+
+		$result = $settings->sanitize( array( 'widget_title' => '<b>Team</b>' ) );
+		$this->assertSame( 'Team', $result['widget_title'] );
+
+		$long = str_repeat( 'a', 200 );
+		$this->assertSame( 80, mb_strlen( $settings->sanitize( array( 'widget_title' => $long ) )['widget_title'] ) );
+	}
+
+	public function test_widget_greeting_is_tag_stripped_capped_at_500_and_keeps_newlines(): void {
+		$settings = new Settings();
+
+		$result = $settings->sanitize( array( 'widget_greeting' => "Hello <script>alert(1)</script>\nWorld" ) );
+		$this->assertStringNotContainsString( '<script>', $result['widget_greeting'] );
+		$this->assertStringContainsString( "\n", $result['widget_greeting'] );
+
+		$long = str_repeat( 'x', 1000 );
+		$this->assertSame( 500, mb_strlen( $settings->sanitize( array( 'widget_greeting' => $long ) )['widget_greeting'] ) );
+	}
+
+	public function test_widget_avatar_id_rejects_non_numeric_and_negative(): void {
+		$settings = new Settings();
+
+		$this->assertSame( 0, $settings->sanitize( array( 'widget_avatar_attachment_id' => 'nope' ) )['widget_avatar_attachment_id'] );
+		$this->assertSame( 0, $settings->sanitize( array( 'widget_avatar_attachment_id' => -5 ) )['widget_avatar_attachment_id'] );
+	}
+
+	public function test_upgrade_path_supplies_the_three_new_keys_at_defaults(): void {
+		$settings = new Settings();
+
+		$legacy_six = array(
+			'remove_data_on_uninstall'        => '0',
+			'conversation_inactive_days'      => 30,
+			'conversation_archived_body_days' => 30,
+			'conversation_purge_days'         => 90,
+			'widget_enabled'                  => '1',
+			'telegram_dispatch_enabled'       => '0',
+		);
+
+		$result = $settings->sanitize( $legacy_six );
+
+		$this->assertSame( '', $result['widget_title'] );
+		$this->assertSame( 'Hi — how can we help?', $result['widget_greeting'] );
+		$this->assertSame( 0, $result['widget_avatar_attachment_id'] );
+	}
+
 	public function test_telegram_dispatch_flag_is_opt_in_and_coerced(): void {
 		$settings = new Settings();
 

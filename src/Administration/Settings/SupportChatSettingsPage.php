@@ -35,9 +35,23 @@ final class SupportChatSettingsPage {
 	public const SLUG = 'universal-support-chat-settings';
 
 	private const SECTION_GENERAL      = 'universal_support_chat_settings_general';
+	private const SECTION_PRESENTATION = 'universal_support_chat_settings_presentation';
 	private const SECTION_LIFECYCLE    = 'universal_support_chat_settings_lifecycle';
 	private const SECTION_TELEGRAM     = 'universal_support_chat_settings_telegram';
 	private const SECTION_DATA_REMOVAL = 'universal_support_chat_settings_data_removal';
+
+	/**
+	 * Admin script handle for the avatar media picker (D5).
+	 */
+	private const MEDIA_SCRIPT_HANDLE = 'universal-support-chat-settings-media';
+
+	/**
+	 * Hook suffix returned by `add_submenu_page()`, captured so the media
+	 * picker assets can be enqueued on this page only.
+	 *
+	 * @var string
+	 */
+	private string $hook_suffix = '';
 
 	/**
 	 * Settings owner.
@@ -82,19 +96,44 @@ final class SupportChatSettingsPage {
 
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_fields' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_media_picker' ) );
 	}
 
 	/**
 	 * Adds the Settings submenu under the existing Support Chat menu.
 	 */
 	public function add_menu(): void {
-		add_submenu_page(
+		$hook_suffix = add_submenu_page(
 			HubPage::SLUG,
 			__( 'Support Chat Settings', 'universal-support-chat' ),
 			__( 'Settings', 'universal-support-chat' ),
 			CapabilityRegistrar::MANAGE,
 			self::SLUG,
 			array( $this, 'render' )
+		);
+
+		$this->hook_suffix = is_string( $hook_suffix ) ? $hook_suffix : '';
+	}
+
+	/**
+	 * Enqueues the WordPress core media modal and the page-scoped avatar
+	 * picker script — on this Settings page only (D5). `settings-media.js`
+	 * declares `media-editor` as its dependency, so `wp.media` is present.
+	 *
+	 * @param string $hook_suffix Current admin page hook suffix.
+	 */
+	public function enqueue_media_picker( string $hook_suffix ): void {
+		if ( '' === $this->hook_suffix || $hook_suffix !== $this->hook_suffix ) {
+			return;
+		}
+
+		wp_enqueue_media();
+		wp_enqueue_script(
+			self::MEDIA_SCRIPT_HANDLE,
+			plugins_url( 'assets/js/settings-media.js', UNIVERSAL_SUPPORT_CHAT_PLUGIN_FILE ),
+			array( 'media-editor' ),
+			UNIVERSAL_SUPPORT_CHAT_VERSION,
+			true
 		);
 	}
 
@@ -117,6 +156,37 @@ final class SupportChatSettingsPage {
 			array( $this, 'render_widget_enabled' ),
 			self::SLUG,
 			self::SECTION_GENERAL
+		);
+
+		add_settings_section(
+			self::SECTION_PRESENTATION,
+			__( 'Widget presentation', 'universal-support-chat' ),
+			static function (): void {
+				echo '<p>' . esc_html__( 'How the front-end chat widget introduces itself. All fields are plain text — HTML and Markdown are stripped. Leave the title blank to show the default “Support chat”.', 'universal-support-chat' ) . '</p>';
+			},
+			self::SLUG
+		);
+
+		add_settings_field(
+			'widget_title',
+			__( 'Widget title', 'universal-support-chat' ),
+			array( $this, 'render_widget_title' ),
+			self::SLUG,
+			self::SECTION_PRESENTATION
+		);
+		add_settings_field(
+			'widget_greeting',
+			__( 'Greeting message', 'universal-support-chat' ),
+			array( $this, 'render_widget_greeting' ),
+			self::SLUG,
+			self::SECTION_PRESENTATION
+		);
+		add_settings_field(
+			'widget_avatar_attachment_id',
+			__( 'Avatar image', 'universal-support-chat' ),
+			array( $this, 'render_widget_avatar' ),
+			self::SLUG,
+			self::SECTION_PRESENTATION
 		);
 
 		add_settings_section(
@@ -228,6 +298,68 @@ final class SupportChatSettingsPage {
 	}
 
 	/**
+	 * Renders the widget-title text input (plain text, ≤ 80 chars).
+	 */
+	public function render_widget_title(): void {
+		$this->text(
+			'widget_title',
+			__( 'Shown in the widget header. Leave blank for the default “Support chat”.', 'universal-support-chat' ),
+			80
+		);
+	}
+
+	/**
+	 * Renders the greeting textarea (plain multiline text, ≤ 500 chars).
+	 */
+	public function render_widget_greeting(): void {
+		$this->textarea(
+			'widget_greeting',
+			__( 'The opening message a visitor sees when they open the widget. Plain text; line breaks are kept.', 'universal-support-chat' ),
+			500
+		);
+	}
+
+	/**
+	 * Renders the avatar image control: a hidden attachment-id input, a
+	 * thumbnail preview, and the core media picker / remove buttons (D5).
+	 * The "Remove" button stores `0`. Server-side validation
+	 * (`wp_attachment_is_image()`) is authoritative regardless.
+	 */
+	public function render_widget_avatar(): void {
+		$values = $this->settings->get();
+		$id     = (int) $values['widget_avatar_attachment_id'];
+		$name   = Settings::OPTION_NAME . '[widget_avatar_attachment_id]';
+		$url    = $id > 0 ? wp_get_attachment_image_url( $id, 'thumbnail' ) : false;
+
+		printf(
+			'<input type="hidden" id="usc-widget-avatar-id" name="%1$s" value="%2$d" />',
+			esc_attr( $name ),
+			absint( $id )
+		);
+
+		echo '<div id="usc-widget-avatar-preview" class="usc-widget-avatar-preview">';
+		if ( is_string( $url ) && '' !== $url ) {
+			printf(
+				'<img src="%s" alt="" width="64" height="64" style="border-radius:50%%;object-fit:cover;" />',
+				esc_url( $url )
+			);
+		}
+		echo '</div>';
+
+		printf(
+			'<button type="button" class="button" id="usc-widget-avatar-choose">%s</button> '
+			. '<button type="button" class="button" id="usc-widget-avatar-remove">%s</button>',
+			esc_html__( 'Choose image', 'universal-support-chat' ),
+			esc_html__( 'Remove', 'universal-support-chat' )
+		);
+
+		printf(
+			'<p class="description">%s</p>',
+			esc_html__( 'An optional image shown next to the title. Images only; decorative. Choose from your Media Library.', 'universal-support-chat' )
+		);
+	}
+
+	/**
 	 * Renders the inactive-days number input.
 	 */
 	public function render_conversation_inactive_days(): void {
@@ -332,6 +464,48 @@ final class SupportChatSettingsPage {
 			. '<label><input type="checkbox" name="%1$s" value="1" %2$s /> %3$s</label>',
 			esc_attr( $name ),
 			checked( $checked, true, false ),
+			esc_html( $description )
+		);
+	}
+
+	/**
+	 * Prints a single-line plain-text field with a maxlength hint.
+	 *
+	 * @param string $key         Option array key.
+	 * @param string $description Field description text.
+	 * @param int    $maxlength   Character cap (mirrors `Settings::sanitize()`).
+	 */
+	private function text( string $key, string $description, int $maxlength ): void {
+		$values = $this->settings->get();
+		$name   = Settings::OPTION_NAME . '[' . $key . ']';
+
+		printf(
+			'<input type="text" class="regular-text" maxlength="%1$d" name="%2$s" value="%3$s" />'
+			. '<p class="description">%4$s</p>',
+			absint( $maxlength ),
+			esc_attr( $name ),
+			esc_attr( (string) ( $values[ $key ] ?? '' ) ),
+			esc_html( $description )
+		);
+	}
+
+	/**
+	 * Prints a multi-line plain-text field with a maxlength hint.
+	 *
+	 * @param string $key         Option array key.
+	 * @param string $description Field description text.
+	 * @param int    $maxlength   Character cap (mirrors `Settings::sanitize()`).
+	 */
+	private function textarea( string $key, string $description, int $maxlength ): void {
+		$values = $this->settings->get();
+		$name   = Settings::OPTION_NAME . '[' . $key . ']';
+
+		printf(
+			'<textarea class="large-text" rows="3" maxlength="%1$d" name="%2$s">%3$s</textarea>'
+			. '<p class="description">%4$s</p>',
+			absint( $maxlength ),
+			esc_attr( $name ),
+			esc_textarea( (string) ( $values[ $key ] ?? '' ) ),
 			esc_html( $description )
 		);
 	}
