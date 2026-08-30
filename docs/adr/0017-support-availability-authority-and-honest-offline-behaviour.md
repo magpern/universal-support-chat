@@ -2,14 +2,15 @@
 
 ## Status
 
-**Proposed** — introduced for [SC-M06 — Support Availability and Offline Tickets](../milestones/sc-m06-support-availability-and-offline-tickets.md)
+**Accepted** — 2026-08-30, per Product Owner implementation acceptance
+[`docs/decisions/sc-adr-0017-availability-po-acceptance.md`](../decisions/sc-adr-0017-availability-po-acceptance.md).
+Introduced for [SC-M06 — Support Availability and Offline Tickets](../milestones/sc-m06-support-availability-and-offline-tickets.md)
 and its plan [sc-m06-support-availability-and-offline-tickets-plan-v2.md](../plans/sc-m06-support-availability-and-offline-tickets-plan-v2.md)
-(which supersedes the product-boundary stub plan v1, retained unedited). Merged as
-**Proposed** in the SC-M06 documentation freeze. Implementation is authorized only from the
-merged freeze baseline, exactly within the frozen scope of this ADR and plan v2, and only
-after a separate Product Owner implementation-acceptance record is merged
-(`docs/decisions/`, per `docs/governance.md` — "No role approves its own work product as
-final"). That later record flips this Status to **Accepted**.
+(which supersedes the product-boundary stub plan v1, retained unedited); merged as
+**Proposed** in the SC-M06 documentation freeze on `main` at
+`cdfcd5ada3de635365d9051c42b6b7da80c82b16` (PR #51). Implementation is authorized — from the
+merged freeze baseline, exactly within the frozen scope of this ADR and plan v2 — by the
+acceptance record cited above; implementation begins only after that record merges.
 
 No plugin version tag, GitHub Release, DEV change, production change, live setting or data
 change, Telegram/Universal Telegram change, Contract v1 change, schema or
