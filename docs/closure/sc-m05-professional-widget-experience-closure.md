@@ -2,11 +2,19 @@
 
 ## Status
 
-**Closed (PASS WITH LIMITATIONS). Merged to `main`. Not deployed.**
+**Closed (PASS WITH LIMITATIONS). Merged to `main`. Not deployed by this record.**
 
 Documentation-only closure record. No runtime code, test, plugin-version, schema, settings,
 CI, dependency, Universal Telegram, DEV, production, deployment, tag, or release change is
 made by this record.
+
+> **Update — DEV deployed and Product Owner accepted (post-closure).** The feature was later
+> deployed to **DEV** through the existing bind-mounted checkout (DEV = `main` @
+> `b3bc9d9b3d1c370324455535dc29bd4c0a79390d`, plugin `0.7.0`, `db_version` 12) and the
+> Product Owner manually verified and approved the DEV result. Production remains untouched;
+> no release or tag. Details:
+> [`sc-m05-dev-deployment-acceptance.md`](sc-m05-dev-deployment-acceptance.md). The
+> "Not deployed" statements below describe this closure record only.
 
 The single limitation is a **post-merge recommended human assistive-technology (AT)
 validation** (VoiceOver / NVDA) that this environment could not run. It is **not** claimed as
