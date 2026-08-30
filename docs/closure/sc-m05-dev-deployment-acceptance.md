@@ -5,9 +5,11 @@
 **DEV deployed. Product Owner accepted the DEV result.** Documentation-only record.
 
 Extends the [SC-M05 closure](sc-m05-professional-widget-experience-closure.md) (Closed —
-PASS WITH LIMITATIONS). This record adds nothing to scope: no runtime code, test,
-plugin-version, schema, settings, CI, Docker, DEV-file, Universal Telegram, production, tag,
-or release change is made by it. Production remains untouched.
+PASS WITH LIMITATIONS). This record adds nothing to scope: no runtime plugin code, test,
+plugin-version, schema, settings, database data, CI, Docker configuration, service state,
+Universal Telegram, production, tag, or release change is made by it. (The DEV checkout was
+briefly used to stage this documentation branch; that is a Git-branch operation, not a change
+to any of the above.) Production remains untouched.
 
 ## What this records
 
@@ -28,10 +30,11 @@ mechanism, container action, or Compose change. The dev VPS bind-mounts
 checkout's Git ref is the deployment.
 
 The checkout had been left on the SC-M05 closure feature branch after PR #49's squash merge.
-It was realigned with a Git-only fast-forward — `git checkout main` followed by
+The checkout was realigned by a Git-only fast-forward — `git checkout main` followed by
 `git merge --ff-only origin/main` (`cf558d1..b3bc9d9`, no merge commit, no conflict). The
-working tree was already byte-identical to `origin/main`, so the realignment changed the Git
-ref only, not the served bytes.
+served runtime contents were byte-identical before and after; no request landed during the
+brief branch switch. (`git checkout` did rewrite the bind-mounted files — the inode changed —
+but the file contents stayed identical.)
 
 | Item | Value |
 |---|---|
@@ -92,10 +95,12 @@ completing WP7 evidence.
 
 This record authorizes nothing further. It documents a DEV deployment that has already
 happened and a Product Owner acceptance that has already been given. **Production is
-untouched.** No GitHub Release or version tag was created. No runtime code, test, plugin
-version, schema, database data, live setting, CI configuration, Docker Compose file,
-container, or Universal Telegram artifact was changed by this record. A production deployment
-is a separate step requiring its own explicit authorization.
+untouched.** No GitHub Release or version tag was created. No runtime plugin code, test,
+plugin version, schema, database data, settings, CI configuration, Docker configuration, or
+service state changed, and no Universal Telegram artifact was touched. (The DEV checkout was
+briefly used to stage this documentation branch and was returned to `main` @ `b3bc9d9`; that
+is a Git-branch operation only.) A production deployment is a separate step requiring its own
+explicit authorization.
 
 ## References
 
