@@ -27,7 +27,7 @@ use UniversalSupportChat\Persistence\Migrator;
  * {@see KnowledgeRetriever} (SC-M07 WP5). This repository is the persistence
  * seam both use.
  */
-final class KnowledgeSourceRepository {
+final class KnowledgeSourceRepository implements SnapshotSource {
 
 	public const TYPE_POST    = 'post';
 	public const TYPE_SNIPPET = 'snippet';
@@ -291,6 +291,66 @@ final class KnowledgeSourceRepository {
 		}
 
 		return $out;
+	}
+
+	/**
+	 * A single row by id (metadata only — no decrypt).
+	 *
+	 * @param int $id Row id.
+	 *
+	 * @return array<string, mixed>|null
+	 */
+	public function find( int $id ): ?array {
+		global $wpdb;
+
+		$row = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$this->table()} WHERE id = %d", $id ), // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			ARRAY_A
+		);
+
+		return is_array( $row ) ? $row : null;
+	}
+
+	/**
+	 * All rows for the admin list, newest first. Metadata only — the
+	 * ciphertext is never selected here.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function all_for_admin(): array {
+		global $wpdb;
+
+		$rows = $wpdb->get_results(
+			"SELECT id, source_uuid, source_type, post_id, label, content_checksum, status, approved_at, last_indexed_at FROM {$this->table()} ORDER BY id DESC", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			ARRAY_A
+		);
+
+		return is_array( $rows ) ? $rows : array();
+	}
+
+	/**
+	 * Approved rows for a WordPress post-id list (checksum recheck sweep).
+	 *
+	 * @return array<int, array{id: int, post_id: int, content_checksum: string}>
+	 */
+	public function approved_post_rows(): array {
+		global $wpdb;
+
+		$rows = $wpdb->get_results(
+			"SELECT id, post_id, content_checksum FROM {$this->table()} WHERE source_type = 'post' AND status = 'approved' AND post_id IS NOT NULL", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			ARRAY_A
+		);
+
+		return array_map(
+			static function ( $row ): array {
+				return array(
+					'id'               => (int) $row['id'],
+					'post_id'          => (int) $row['post_id'],
+					'content_checksum' => (string) $row['content_checksum'],
+				);
+			},
+			is_array( $rows ) ? $rows : array()
+		);
 	}
 
 	/**
