@@ -2,7 +2,18 @@
 
 ## Status
 
-Planned
+**Closed (PASS WITH LIMITATIONS)** — implementation
+[PR #59](https://github.com/magpern/universal-support-chat/pull/59) squash-merged to `main`
+at `a81390086e37af04eba0a0ee1874949376be2c5a`; closure
+[`docs/closure/sc-m07-ai-first-visitor-support-closure.md`](../closure/sc-m07-ai-first-visitor-support-closure.md).
+Freeze `537d3b0` (PR #57) / Product Owner acceptance `b47ce61` (PR #58); ADR-0018 **Accepted**.
+All CI green (`db_version` `12 → 13`, version `0.8.0 → 0.9.0`). Accepted limitations —
+real-provider verification, SC-M05-standard browser QA, a VoiceOver/NVDA smoke, and
+functional DEV acceptance + a Product Owner functional sign-off — are deferred to DEV
+acceptance ([`docs/closure/sc-m07-dev-acceptance-plan.md`](../closure/sc-m07-dev-acceptance-plan.md)).
+Not deployed; production untouched.
+
+Original status: Planned
 
 Depends on: SC-M02 (conversation SoR + visitor REST + Hub replies); SC-M06 / ADR-0017
 (availability authority — the AI must not claim a human is available unless the availability
