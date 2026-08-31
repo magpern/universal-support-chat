@@ -15,6 +15,7 @@ use UniversalSupportChat\Persistence\MigrationLock;
 use UniversalSupportChat\Persistence\Migrator;
 use UniversalSupportChat\Persistence\SchemaHealth;
 use WP_REST_Request;
+use UniversalSupportChat\Tests\Integration\AI\Support\TruncatesAiTables;
 use WP_UnitTestCase;
 
 /**
@@ -23,6 +24,8 @@ use WP_UnitTestCase;
  */
 final class ConversationAiMessageTest extends WP_UnitTestCase {
 
+	use TruncatesAiTables;
+
 	private SchemaHealth $health;
 	private ConversationRepository $conversations;
 	private MessageRepository $messages;
@@ -30,6 +33,7 @@ final class ConversationAiMessageTest extends WP_UnitTestCase {
 
 	public function set_up(): void {
 		parent::set_up();
+		$this->truncate_ai_tables();
 		( new Migrator( new MigrationLock() ) )->maybe_migrate();
 		$this->health        = new SchemaHealth();
 		$this->conversations = new ConversationRepository( $this->health );

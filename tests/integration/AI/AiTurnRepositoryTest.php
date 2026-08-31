@@ -8,6 +8,7 @@ namespace UniversalSupportChat\Tests\Integration\AI;
 use UniversalSupportChat\AI\Turn\AiTurnRepository;
 use UniversalSupportChat\Persistence\MigrationLock;
 use UniversalSupportChat\Persistence\Migrator;
+use UniversalSupportChat\Tests\Integration\AI\Support\TruncatesAiTables;
 use WP_UnitTestCase;
 
 /**
@@ -16,10 +17,13 @@ use WP_UnitTestCase;
  */
 final class AiTurnRepositoryTest extends WP_UnitTestCase {
 
+	use TruncatesAiTables;
+
 	private AiTurnRepository $repo;
 
 	public function set_up(): void {
 		parent::set_up();
+		$this->truncate_ai_tables();
 		( new Migrator( new MigrationLock() ) )->maybe_migrate();
 		$this->repo = new AiTurnRepository();
 	}

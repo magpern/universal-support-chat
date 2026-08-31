@@ -11,6 +11,7 @@ use UniversalSupportChat\AI\Knowledge\KnowledgeSourceRepository;
 use UniversalSupportChat\Core\Security\CredentialVault;
 use UniversalSupportChat\Persistence\MigrationLock;
 use UniversalSupportChat\Persistence\Migrator;
+use UniversalSupportChat\Tests\Integration\AI\Support\TruncatesAiTables;
 use WP_UnitTestCase;
 
 /**
@@ -19,12 +20,15 @@ use WP_UnitTestCase;
  */
 final class KnowledgeIndexerTest extends WP_UnitTestCase {
 
+	use TruncatesAiTables;
+
 	private KnowledgeSourceRepository $repo;
 	private KnowledgeIndexer $indexer;
 	private KnowledgeRetriever $retriever;
 
 	public function set_up(): void {
 		parent::set_up();
+		$this->truncate_ai_tables();
 		( new Migrator( new MigrationLock() ) )->maybe_migrate();
 		$this->repo      = new KnowledgeSourceRepository( new CredentialVault() );
 		$this->indexer   = new KnowledgeIndexer( $this->repo, null );

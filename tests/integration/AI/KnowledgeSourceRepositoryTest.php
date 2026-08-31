@@ -9,6 +9,7 @@ use UniversalSupportChat\AI\Knowledge\KnowledgeSourceRepository;
 use UniversalSupportChat\Core\Security\CredentialVault;
 use UniversalSupportChat\Persistence\MigrationLock;
 use UniversalSupportChat\Persistence\Migrator;
+use UniversalSupportChat\Tests\Integration\AI\Support\TruncatesAiTables;
 use WP_UnitTestCase;
 
 /**
@@ -16,6 +17,8 @@ use WP_UnitTestCase;
  * read, revoke NULLs the ciphertext, hard-delete removes the row.
  */
 final class KnowledgeSourceRepositoryTest extends WP_UnitTestCase {
+
+	use TruncatesAiTables;
 
 	private KnowledgeSourceRepository $repo;
 
@@ -25,6 +28,7 @@ final class KnowledgeSourceRepositoryTest extends WP_UnitTestCase {
 		global $wpdb;
 
 		parent::set_up();
+		$this->truncate_ai_tables();
 		( new Migrator( new MigrationLock() ) )->maybe_migrate();
 		$this->repo  = new KnowledgeSourceRepository( new CredentialVault() );
 		$this->table = $wpdb->prefix . Migrator::AI_KNOWLEDGE_SOURCES_TABLE;
