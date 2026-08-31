@@ -54,23 +54,34 @@ final class ConversationDetailPage {
 	private NoteRepository $notes;
 
 	/**
+	 * Optional Hub AI panel (SC-M07). Rendered above the transcript when the
+	 * conversation has had an AI turn.
+	 *
+	 * @var \UniversalSupportChat\AI\Admin\HubAiPanel|null
+	 */
+	private ?\UniversalSupportChat\AI\Admin\HubAiPanel $ai_panel;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param SchemaHealth           $schema_health Schema health.
 	 * @param ConversationRepository $conversations Conversations.
 	 * @param MessageRepository      $messages      Messages.
 	 * @param NoteRepository         $notes         Notes.
+	 * @param \UniversalSupportChat\AI\Admin\HubAiPanel|null $ai_panel Optional AI panel (SC-M07).
 	 */
 	public function __construct(
 		SchemaHealth $schema_health,
 		ConversationRepository $conversations,
 		MessageRepository $messages,
-		NoteRepository $notes
+		NoteRepository $notes,
+		?\UniversalSupportChat\AI\Admin\HubAiPanel $ai_panel = null
 	) {
 		$this->schema_health = $schema_health;
 		$this->conversations = $conversations;
 		$this->messages      = $messages;
 		$this->notes         = $notes;
+		$this->ai_panel      = $ai_panel;
 	}
 
 	/**
@@ -109,6 +120,10 @@ final class ConversationDetailPage {
 		echo '<tr><th>' . esc_html__( 'Status', 'universal-support-chat' ) . '</th><td>' . esc_html( $conversation->status() ) . '</td></tr>';
 		echo '<tr><th>' . esc_html__( 'Updated', 'universal-support-chat' ) . '</th><td>' . esc_html( $conversation->updated_at() ) . '</td></tr>';
 		echo '</tbody></table>';
+
+		if ( null !== $this->ai_panel ) {
+			$this->ai_panel->render( $conversation );
+		}
 
 		$messages = $this->messages->list_for_conversation( $conversation->id(), 0, 500 );
 		echo '<h2>' . esc_html__( 'Transcript', 'universal-support-chat' ) . '</h2>';
