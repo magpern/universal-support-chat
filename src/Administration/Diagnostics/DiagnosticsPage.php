@@ -9,6 +9,9 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Administration\Diagnostics;
 
+use UniversalSupportChat\AI\Knowledge\KnowledgeSourceRepository;
+use UniversalSupportChat\AI\Provider\ProviderKeyManager;
+use UniversalSupportChat\AI\Turn\AiTurnRepository;
 use UniversalSupportChat\Administration\Hub\HubPage;
 use UniversalSupportChat\Administration\Settings\SupportChatSettingsPage;
 use UniversalSupportChat\Audit\AuditLogRepository;
@@ -92,6 +95,27 @@ final class DiagnosticsPage {
 	private ?AvailabilityService $availability;
 
 	/**
+	 * AI provider key manager (SC-M07), or null.
+	 *
+	 * @var ProviderKeyManager|null
+	 */
+	private ?ProviderKeyManager $ai_keys;
+
+	/**
+	 * AI turn repository (SC-M07), or null.
+	 *
+	 * @var AiTurnRepository|null
+	 */
+	private ?AiTurnRepository $ai_turns;
+
+	/**
+	 * AI knowledge source repository (SC-M07), or null.
+	 *
+	 * @var KnowledgeSourceRepository|null
+	 */
+	private ?KnowledgeSourceRepository $ai_knowledge;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param SchemaHealth            $schema_health Schema health.
@@ -101,6 +125,9 @@ final class DiagnosticsPage {
 	 * @param PeerRepository          $peers         Peer store (read-only).
 	 * @param DispatchOutboxRepository $outbox        Dispatch outbox (read-only).
 	 * @param AvailabilityService|null $availability   Availability service (read-only).
+	 * @param ProviderKeyManager|null       $ai_keys      AI provider key manager (SC-M07).
+	 * @param AiTurnRepository|null          $ai_turns     AI turn repository (SC-M07).
+	 * @param KnowledgeSourceRepository|null $ai_knowledge AI knowledge source repository (SC-M07).
 	 */
 	public function __construct(
 		SchemaHealth $schema_health,
@@ -109,7 +136,10 @@ final class DiagnosticsPage {
 		Settings $settings,
 		PeerRepository $peers,
 		DispatchOutboxRepository $outbox,
-		?AvailabilityService $availability = null
+		?AvailabilityService $availability = null,
+		?ProviderKeyManager $ai_keys = null,
+		?AiTurnRepository $ai_turns = null,
+		?KnowledgeSourceRepository $ai_knowledge = null
 	) {
 		$this->schema_health = $schema_health;
 		$this->audit_repo    = $audit_repo;
@@ -118,6 +148,9 @@ final class DiagnosticsPage {
 		$this->peers         = $peers;
 		$this->outbox        = $outbox;
 		$this->availability  = $availability;
+		$this->ai_keys       = $ai_keys;
+		$this->ai_turns      = $ai_turns;
+		$this->ai_knowledge  = $ai_knowledge;
 	}
 
 	/**
@@ -201,6 +234,8 @@ final class DiagnosticsPage {
 			$this->row( __( 'Availability — override expiry', 'universal-support-chat' ), (string) $expiry_label );
 			$this->row( __( 'Availability — schedule config valid', 'universal-support-chat' ), $schedule_valid ? 'yes' : 'no' );
 		}
+		$this->render_ai_rows( $values );
+
 		echo '</tbody></table>';
 
 		if ( null !== $this->availability && ! $this->availability->schedule_config_is_valid() ) {
@@ -216,6 +251,55 @@ final class DiagnosticsPage {
 		);
 
 		echo '</div>';
+	}
+
+	/**
+	 * Renders the SC-M07 AI-assistant diagnostics rows (safe aggregates only:
+	 * enabled/disabled, configured yes/no + fail-closed probe, model label,
+	 * knowledge source counts, AI turns today vs cap, handoffs today, last
+	 * outcome / last provider error class). No credential, prompt, response,
+	 * timestamp, identifier, or raw error (ADR-0018 §11, ADR-0015 §3).
+	 *
+	 * @param array<string, mixed> $values Resolved settings.
+	 */
+	private function render_ai_rows( array $values ): void {
+		if ( null === $this->ai_keys || null === $this->ai_turns || null === $this->ai_knowledge ) {
+			return;
+		}
+
+		$this->row( __( 'AI assistant', 'universal-support-chat' ), empty( $values['ai_enabled'] ) ? 'disabled' : 'enabled' );
+		$this->row(
+			__( 'AI provider key', 'universal-support-chat' ),
+			$this->ai_keys->is_configured()
+				? ( $this->ai_keys->decrypts_ok() ? 'configured' : 'configured (fail-closed)' )
+				: 'not configured'
+		);
+		$this->row( __( 'AI model', 'universal-support-chat' ), (string) ( $values['ai_model'] ?? '' ) );
+
+		$by_status = $this->ai_knowledge->count_by_status();
+		$this->row(
+			__( 'AI knowledge sources (approved / stale / revoked)', 'universal-support-chat' ),
+			sprintf(
+				'%d / %d / %d',
+				$by_status[ KnowledgeSourceRepository::STATUS_APPROVED ] ?? 0,
+				$by_status[ KnowledgeSourceRepository::STATUS_STALE ] ?? 0,
+				$by_status[ KnowledgeSourceRepository::STATUS_REVOKED ] ?? 0
+			)
+		);
+
+		$since = gmdate( 'Y-m-d' ) . ' 00:00:00';
+		$this->row(
+			__( 'AI turns today vs daily cap', 'universal-support-chat' ),
+			$this->ai_turns->count_created_since( $since ) . ' / ' . (int) ( $values['ai_daily_request_cap'] ?? 0 )
+		);
+		$this->row( __( 'AI handoffs today', 'universal-support-chat' ), (string) $this->ai_turns->count_handoffs_since( $since ) );
+
+		$recent = $this->ai_turns->most_recent();
+		$this->row( __( 'AI last turn status', 'universal-support-chat' ), null !== $recent ? (string) $recent['status'] : 'n/a' );
+		$this->row(
+			__( 'AI last provider error class', 'universal-support-chat' ),
+			( null !== $recent && null !== ( $recent['provider_error_class'] ?? null ) ) ? (string) $recent['provider_error_class'] : 'none'
+		);
 	}
 
 	/**

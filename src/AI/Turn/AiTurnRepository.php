@@ -357,7 +357,24 @@ final class AiTurnRepository {
 	}
 
 	/**
+	 * The most recent turn row across all conversations (Diagnostics only).
+	 *
+	 * @phpstan-impure
+	 *
+	 * @return array<string, mixed>|null
+	 */
+	public function most_recent(): ?array {
+		global $wpdb;
+
+		$row = $wpdb->get_row( "SELECT * FROM {$this->table()} ORDER BY id DESC LIMIT 1", ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		return is_array( $row ) ? $row : null;
+	}
+
+	/**
 	 * The most recent turn row for a conversation (for the Hub AI panel).
+	 *
+	 * @phpstan-impure
 	 *
 	 * @param int $conversation_id Conversation id.
 	 *
