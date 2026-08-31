@@ -207,7 +207,7 @@ squash `f3b327b`:
 `InvalidScheduleException.php`, `AvailabilityResolver.php`, `AvailabilityService.php`,
 `src/Availability/Admin/OverrideAction.php`.
 
-**Modified source (10)** — `src/Core/Plugin.php`, `src/Core/Configuration/Settings.php`,
+**Modified source (12)** — `src/Core/Plugin.php`, `src/Core/Configuration/Settings.php`,
 `src/Core/Lifecycle/Uninstaller.php`, `src/Conversations/ConversationStatus.php`,
 `src/Conversations/ConversationRepository.php`,
 `src/Conversations/Rest/ConversationsController.php`,
