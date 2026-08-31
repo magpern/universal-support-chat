@@ -2,7 +2,14 @@
 
 ## Status
 
-Planned
+**Superseded by [SC-M07 — AI-First Visitor Support](sc-m07-ai-first-visitor-support.md)**
+([ADR-0018](../adr/0018-ai-first-visitor-support.md), Proposed in the SC-M07 documentation
+freeze). SC-M07 defines the AI-first visitor experience directly — grounded, read-only,
+human-escalating, disabled by default — without the SC-AI1 prerequisite. This charter is
+retained unchanged as immutable history; the scope and acceptance criteria below are not
+implemented as written.
+
+Original status: Planned
 
 Depends on: **SC-AI1**; SC-M06 recommended for availability-aware escalation
 

@@ -1,5 +1,10 @@
 # SC-AI2 Controlled Direct AI Responses — Implementation Plan v1
 
+> **Superseded by [`sc-m07-ai-first-visitor-support-plan-v1.md`](sc-m07-ai-first-visitor-support-plan-v1.md)**
+> ([ADR-0018](../adr/0018-ai-first-visitor-support.md), Proposed in the SC-M07 documentation
+> freeze). SC-M07 defines the AI-first visitor experience directly; this product-boundary
+> stub is retained (otherwise unedited) as immutable history and is not implemented.
+
 ## 1. References
 
 - Charter: `docs/milestones/sc-ai2-controlled-direct-ai-responses.md`

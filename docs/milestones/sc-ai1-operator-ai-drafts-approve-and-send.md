@@ -2,7 +2,14 @@
 
 ## Status
 
-Planned
+**Superseded by [SC-M07 — AI-First Visitor Support](sc-m07-ai-first-visitor-support.md)**
+([ADR-0018](../adr/0018-ai-first-visitor-support.md), Proposed in the SC-M07 documentation
+freeze). SC-M07 makes AI the first responder with human escalation always available and
+operator override authoritative, so this operator-draft co-pilot is no longer a prerequisite
+and has no committed slot. This charter is retained unchanged as immutable history; the
+scope and acceptance criteria below are not implemented.
+
+Original status: Planned
 
 Depends on: SC-M02; **must precede SC-AI2**
 

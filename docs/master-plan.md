@@ -14,7 +14,7 @@ Build a standalone WordPress plugin that provides professional website support c
 2. WordPress Hub inbox with first-class operator replies (no channel required).
 3. Tickets, waiting queue, assignment, notes, and audit.
 4. Support hours and live availability.
-5. Future controlled chat AI (human-approved drafts first; then direct AI).
+5. Controlled chat AI — an AI-first visitor experience, grounded in approved content, with human escalation always available and operator override authoritative ([ADR-0018](adr/0018-ai-first-visitor-support.md) / [SC-M07](milestones/sc-m07-ai-first-visitor-support.md)).
 6. Optional channel adapters (Universal Telegram first) for escalated operator workflows only.
 
 ## 2. Original product requirements (acceptance criteria)
@@ -35,7 +35,7 @@ Configurable opening Hello/greeting, title/avatar, and professional chat present
 
 ### R4 — AI from the start
 
-Future AI is enabled by administrator **site policy** and visitor **disclosure**, not a visitor checkbox.
+Future AI is enabled by administrator **site policy** and visitor **disclosure**, not a visitor checkbox. Realised by [SC-M07](milestones/sc-m07-ai-first-visitor-support.md) ([ADR-0018](adr/0018-ai-first-visitor-support.md)).
 
 ### R5 — Support hours and live status
 
@@ -43,7 +43,7 @@ Support Chat owns schedule, exceptions, manual `Automatic / Online / Offline`, w
 
 ### R6 — AI first-line support
 
-Future AI answers routine questions before escalating according to controlled policy.
+Future AI answers routine questions before escalating according to controlled policy. Realised by [SC-M07](milestones/sc-m07-ai-first-visitor-support.md) ([ADR-0018](adr/0018-ai-first-visitor-support.md)).
 
 ### R7 — Offline human support
 
@@ -55,7 +55,7 @@ A human request **always** creates a durable Support Chat ticket with truthful o
 - **WordPress is SoR** — conversations and tickets live in Support Chat tables.
 - **Optional channels** — Contract v1 ([ADR-0005](adr/0005-canonical-support-channel-contract-v1.md)); fail closed per channel ([ADR-0006](adr/0006-optional-channel-and-adapter-failure-model.md)).
 - **Privacy by default** — [ADR-0003](adr/0003-security-privacy-and-visitor-isolation.md).
-- **Human control before autonomy** — SC-AI1 before SC-AI2.
+- **AI-first with human escalation always available and operator override authoritative** — [ADR-0018](adr/0018-ai-first-visitor-support.md) / [SC-M07](milestones/sc-m07-ai-first-visitor-support.md): an AI assistant is the first responder, grounded in an administrator-approved content allow-list, with zero side-effecting tools; a human can be reached at any time and an operator can take over and stop the AI. (This supersedes the earlier "human control before autonomy — SC-AI1 before SC-AI2" ordering.)
 - **No dual-write migration** — [ADR-0004](adr/0004-migration-and-retention-principles.md).
 - **No companion server**.
 - **Mutually authenticated Contract calls** — [ADR-0007](adr/0007-contract-v1-mutual-signed-adapter-authentication-profile.md): mutual Ed25519 request signing between Support Chat and each adapter; no shared secret, no bare user-context call, no public mutation bypass.
@@ -78,11 +78,12 @@ A human request **always** creates a durable Support Chat ticket with truthful o
 | 6 | [SC-M04](milestones/sc-m04-telegram-optional-acceptance.md) | Prove SC with adapter absent/unavailable | R1, R7 |
 | 7 | [SC-M05](milestones/sc-m05-professional-widget-experience.md) | Professional launcher and greeting | R2, R3 |
 | 8 | [SC-M06](milestones/sc-m06-support-availability-and-offline-tickets.md) | Hours, status, offline tickets ([ADR-0017](adr/0017-support-availability-authority-and-honest-offline-behaviour.md)) | R5, R7 |
-| 9 | [SC-AI1](milestones/sc-ai1-operator-ai-drafts-approve-and-send.md) | Operator drafts + Approve and send as *Support team* | Safety before autonomy |
-| 10 | [SC-AI2](milestones/sc-ai2-controlled-direct-ai-responses.md) | Direct AI as *AI assistant* | R4, R6 |
-| 11 | [SC-AI3](milestones/sc-ai3-ai-assisted-support-and-rag.md) | **Future / not implemented.** AI-assisted support / RAG knowledge base — grounded, traceable, site-scoped source corpus for SC-AI1/SC-AI2. Own ADR, plan, PO approval, evaluation, and privacy/security review required. | R4, R6 |
+| 9 | [SC-M07](milestones/sc-m07-ai-first-visitor-support.md) | **AI-first visitor support** ([ADR-0018](adr/0018-ai-first-visitor-support.md)) — an AI assistant is the first responder, grounded in an administrator-approved content allow-list (bounded keyword retrieval, **not** RAG), zero side-effecting tools, explicit human handoff, operator takeover, disabled by default. **Supersedes SC-AI1 and SC-AI2.** | R1, R4, R6 |
+| 10 | ~~[SC-AI1](milestones/sc-ai1-operator-ai-drafts-approve-and-send.md)~~ | Operator drafts + Approve and send as *Support team* — **superseded by SC-M07** (charter retained, immutable) | Safety before autonomy |
+| 11 | ~~[SC-AI2](milestones/sc-ai2-controlled-direct-ai-responses.md)~~ | Direct AI as *AI assistant* — **superseded by SC-M07** (charter retained, immutable) | R4, R6 |
+| — | [SC-AI3](milestones/sc-ai3-ai-assisted-support-and-rag.md) | **Future / not implemented.** AI-assisted support / genuine vector / RAG knowledge base — grounded, traceable, site-scoped source corpus extending the SC-M07 knowledge and provider seams. Own ADR, plan, PO approval, evaluation, and privacy/security review required. | R4, R6 |
 
-**SC-AI1 precedes SC-AI2.** SC-AI3 is a deferred forward-looking note only — see its charter; there is no ADR, plan, schema, code, or approval for it.
+**SC-M07 supersedes SC-AI1 and SC-AI2.** SC-AI3 is a deferred forward-looking note only — see its charter; there is no ADR, plan, schema, code, or approval for it.
 
 ## 6. Explicit non-goals (foundation)
 
