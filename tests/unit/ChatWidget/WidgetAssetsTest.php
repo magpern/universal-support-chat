@@ -49,6 +49,19 @@ final class WidgetAssetsTest extends TestCase {
 		$this->assertStringContainsString( 'data-has-messages', $this->js() );
 	}
 
+	public function test_js_dedupes_rendered_messages_by_id(): void {
+		$js = $this->js();
+
+		// The periodic poll and the explicit post-send poll can both be in
+		// flight with the same stale after_id, so appendMessage must drop a
+		// message id it has already rendered rather than draw it twice.
+		$this->assertStringContainsString( 'seenMessageIds', $js );
+		$this->assertMatchesRegularExpression( '/if\s*\(\s*seenMessageIds\[\s*msg\.id\s*\]\s*\)\s*\{\s*return;/', $js );
+		// The dedupe set is reset whenever the transcript is cleared.
+		$clear_segment = substr( $js, (int) strpos( $js, 'function clearMessages' ), 200 );
+		$this->assertStringContainsString( 'seenMessageIds = {}', $clear_segment );
+	}
+
 	public function test_js_availability_is_rendered_as_plain_text_and_pill_is_honest(): void {
 		$js = $this->js();
 
