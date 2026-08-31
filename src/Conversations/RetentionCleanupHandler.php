@@ -9,6 +9,7 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Conversations;
 
+use UniversalSupportChat\AI\Turn\AiTurnRepository;
 use UniversalSupportChat\Audit\AuditLogger;
 use UniversalSupportChat\Availability\AvailabilityService;
 use UniversalSupportChat\Core\Configuration\Settings;
@@ -78,6 +79,16 @@ final class RetentionCleanupHandler {
 	private ?AvailabilityService $availability;
 
 	/**
+	 * Optional AI turn repository (ADR-0018 §11) — the metadata-only
+	 * `ai_turns` rows for a purged conversation are deleted alongside its
+	 * messages so no orphan AI metadata survives. Knowledge sources are
+	 * config-like admin data and are never touched by retention.
+	 *
+	 * @var AiTurnRepository|null
+	 */
+	private ?AiTurnRepository $ai_turns;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param ConversationRepository        $conversations   Conversation repository.
@@ -87,6 +98,7 @@ final class RetentionCleanupHandler {
 	 * @param AuditLogger                   $audit           Audit logger.
 	 * @param DispatchOutboxRepository|null $dispatch_outbox Optional Telegram dispatch outbox.
 	 * @param AvailabilityService|null      $availability    Optional availability service (override reaping).
+	 * @param AiTurnRepository|null         $ai_turns        Optional AI turn repository (SC-M07).
 	 */
 	public function __construct(
 		ConversationRepository $conversations,
@@ -95,7 +107,8 @@ final class RetentionCleanupHandler {
 		Settings $settings,
 		AuditLogger $audit,
 		?DispatchOutboxRepository $dispatch_outbox = null,
-		?AvailabilityService $availability = null
+		?AvailabilityService $availability = null,
+		?AiTurnRepository $ai_turns = null
 	) {
 		$this->conversations   = $conversations;
 		$this->messages        = $messages;
@@ -104,6 +117,7 @@ final class RetentionCleanupHandler {
 		$this->audit           = $audit;
 		$this->dispatch_outbox = $dispatch_outbox;
 		$this->availability    = $availability;
+		$this->ai_turns        = $ai_turns;
 	}
 
 	/**
@@ -187,6 +201,9 @@ final class RetentionCleanupHandler {
 				$this->notes->delete_for_conversation( $conversation->id() );
 				if ( null !== $this->dispatch_outbox ) {
 					$this->dispatch_outbox->delete_for_conversation( $conversation->id() );
+				}
+				if ( null !== $this->ai_turns ) {
+					$this->ai_turns->delete_for_conversation( $conversation->id() );
 				}
 				$this->conversations->delete_by_id( $conversation->id() );
 			}

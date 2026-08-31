@@ -9,6 +9,8 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Administration\Settings;
 
+use UniversalSupportChat\AI\Admin\ProviderKeyAction;
+use UniversalSupportChat\AI\Provider\ProviderKeyManager;
 use UniversalSupportChat\Administration\Diagnostics\DiagnosticsPage;
 use UniversalSupportChat\Administration\Hub\HubPage;
 use UniversalSupportChat\Audit\AuditLogger;
@@ -41,6 +43,7 @@ final class SupportChatSettingsPage {
 	private const SECTION_AVAILABILITY = 'universal_support_chat_settings_availability';
 	private const SECTION_LIFECYCLE    = 'universal_support_chat_settings_lifecycle';
 	private const SECTION_TELEGRAM     = 'universal_support_chat_settings_telegram';
+	private const SECTION_AI           = 'universal_support_chat_settings_ai';
 	private const SECTION_DATA_REMOVAL = 'universal_support_chat_settings_data_removal';
 
 	/**
@@ -93,16 +96,25 @@ final class SupportChatSettingsPage {
 	private ?AuditLogger $audit;
 
 	/**
+	 * AI provider key manager (SC-M07), or null when AI is not wired.
+	 *
+	 * @var ProviderKeyManager|null
+	 */
+	private ?ProviderKeyManager $provider_keys;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Settings         $settings Settings owner.
-	 * @param PeerRepository   $peers    Peer store (read-only).
-	 * @param AuditLogger|null $audit    Optional audit logger.
+	 * @param Settings                $settings      Settings owner.
+	 * @param PeerRepository          $peers         Peer store (read-only).
+	 * @param AuditLogger|null        $audit         Optional audit logger.
+	 * @param ProviderKeyManager|null $provider_keys Optional AI provider key manager (SC-M07).
 	 */
-	public function __construct( Settings $settings, PeerRepository $peers, ?AuditLogger $audit = null ) {
-		$this->settings = $settings;
-		$this->peers    = $peers;
-		$this->audit    = $audit;
+	public function __construct( Settings $settings, PeerRepository $peers, ?AuditLogger $audit = null, ?ProviderKeyManager $provider_keys = null ) {
+		$this->settings      = $settings;
+		$this->peers         = $peers;
+		$this->audit         = $audit;
+		$this->provider_keys = $provider_keys;
 	}
 
 	/**
@@ -136,6 +148,10 @@ final class SupportChatSettingsPage {
 						is_array( $old_value ) ? $old_value : array(),
 						is_array( $value ) ? $value : array()
 					);
+					$this->audit_ai_changes(
+						is_array( $old_value ) ? $old_value : array(),
+						is_array( $value ) ? $value : array()
+					);
 				}
 			},
 			10,
@@ -146,10 +162,67 @@ final class SupportChatSettingsPage {
 			function ( $option, $value ): void {
 				if ( Settings::OPTION_NAME === $option ) {
 					$this->audit_availability_changes( $this->settings->defaults(), is_array( $value ) ? $value : array() );
+					$this->audit_ai_changes( $this->settings->defaults(), is_array( $value ) ? $value : array() );
 				}
 			},
 			10,
 			2
+		);
+	}
+
+	/**
+	 * Records `ai.config_changed` when a save changed any `ai_*` setting.
+	 * Context carries only the list of changed key names and, for the master
+	 * switch, its new boolean state — never the disclosure text, a model
+	 * choice's implications, or any identifier (ADR-0018 §11).
+	 *
+	 * @param array<string, mixed> $old     Previous option array.
+	 * @param array<string, mixed> $updated New option array.
+	 */
+	private function audit_ai_changes( array $old, array $updated ): void {
+		if ( null === $this->audit ) {
+			return;
+		}
+
+		$ai_keys = array(
+			'ai_enabled',
+			'ai_model',
+			'ai_max_output_tokens',
+			'ai_request_timeout_seconds',
+			'ai_max_context_chars',
+			'ai_max_retries',
+			'ai_daily_request_cap',
+			'ai_per_conversation_turn_cap',
+			'ai_disclosure_text',
+		);
+
+		$changed = array();
+		foreach ( $ai_keys as $key ) {
+			if ( ( $old[ $key ] ?? null ) !== ( $updated[ $key ] ?? null ) ) {
+				$changed[] = $key;
+			}
+		}
+
+		if ( array() === $changed ) {
+			return;
+		}
+
+		$user_id    = function_exists( 'get_current_user_id' ) ? get_current_user_id() : 0;
+		$actor_type = $user_id > 0 ? 'operator' : 'system';
+
+		$this->audit->record(
+			'ai.config_changed',
+			$actor_type,
+			$user_id,
+			array(
+				'changed'    => implode( ',', $changed ),
+				'ai_enabled' => ! empty( $updated['ai_enabled'] ) ? 'yes' : 'no',
+			),
+			array(
+				'changed'    => Classification::PUBLIC,
+				'ai_enabled' => Classification::PUBLIC,
+			),
+			Classification::INTERNAL
 		);
 	}
 
@@ -375,6 +448,44 @@ final class SupportChatSettingsPage {
 		);
 
 		add_settings_section(
+			self::SECTION_AI,
+			__( 'AI Assistant', 'universal-support-chat' ),
+			static function (): void {
+				echo '<p>' . esc_html__( 'An AI assistant answers visitors first, using only content you approve under Conversations → AI Knowledge, and hands off to a person on request or whenever it cannot answer safely. It never issues refunds, coupons, discounts, or account changes. Disabled until you turn it on and add an API key below.', 'universal-support-chat' ) . '</p>';
+			},
+			self::SLUG
+		);
+
+		add_settings_field(
+			'ai_enabled',
+			__( 'Enable the AI assistant', 'universal-support-chat' ),
+			array( $this, 'render_ai_enabled' ),
+			self::SLUG,
+			self::SECTION_AI
+		);
+		add_settings_field(
+			'ai_model',
+			__( 'Model', 'universal-support-chat' ),
+			array( $this, 'render_ai_model' ),
+			self::SLUG,
+			self::SECTION_AI
+		);
+		add_settings_field(
+			'ai_disclosure_text',
+			__( 'Visitor disclosure', 'universal-support-chat' ),
+			array( $this, 'render_ai_disclosure_text' ),
+			self::SLUG,
+			self::SECTION_AI
+		);
+		add_settings_field(
+			'ai_limits',
+			__( 'Limits', 'universal-support-chat' ),
+			array( $this, 'render_ai_limits' ),
+			self::SLUG,
+			self::SECTION_AI
+		);
+
+		add_settings_section(
 			self::SECTION_DATA_REMOVAL,
 			__( 'Data removal', 'universal-support-chat' ),
 			static function (): void {
@@ -410,6 +521,8 @@ final class SupportChatSettingsPage {
 		do_settings_sections( self::SLUG );
 		submit_button();
 		echo '</form>';
+
+		$this->render_provider_key_panel();
 
 		printf(
 			'<p><a href="%s">%s</a></p>',
@@ -698,6 +811,98 @@ final class SupportChatSettingsPage {
 	}
 
 	/**
+	 * Renders the AI enable checkbox with its hidden `0` companion.
+	 */
+	public function render_ai_enabled(): void {
+		$this->checkbox(
+			'ai_enabled',
+			__( 'Let the AI assistant answer visitors first. A person can always be reached, and an operator can take over at any time.', 'universal-support-chat' )
+		);
+	}
+
+	/**
+	 * Renders the model select (fixed allow-list).
+	 */
+	public function render_ai_model(): void {
+		$options = array();
+		foreach ( Settings::AI_ALLOWED_MODELS as $model ) {
+			$options[ $model ] = $model;
+		}
+
+		$this->select(
+			'ai_model',
+			$options,
+			__( 'The OpenAI model used for answers. The first option is the most economical.', 'universal-support-chat' )
+		);
+	}
+
+	/**
+	 * Renders the visitor disclosure textarea (plain multiline text, ≤ 500).
+	 */
+	public function render_ai_disclosure_text(): void {
+		$this->textarea(
+			'ai_disclosure_text',
+			__( 'Shown once to the visitor when the AI assistant first replies. Plain text. Leave blank to use the default wording.', 'universal-support-chat' ),
+			500
+		);
+	}
+
+	/**
+	 * Renders the numeric AI limits as a small group of bounded number
+	 * fields. Out-of-range values are clamped on save (never rejected).
+	 */
+	public function render_ai_limits(): void {
+		$this->number_range( 'ai_max_output_tokens', __( 'Max answer length (tokens)', 'universal-support-chat' ), 64, 2000, 1 );
+		$this->number_range( 'ai_request_timeout_seconds', __( 'Request timeout (seconds)', 'universal-support-chat' ), 5, 60, 1 );
+		$this->number_range( 'ai_max_context_chars', __( 'Context budget (characters)', 'universal-support-chat' ), 500, 20000, 1 );
+		$this->number_range( 'ai_max_retries', __( 'Retries on a transient provider error', 'universal-support-chat' ), 0, 6, 1 );
+		$this->number_range( 'ai_daily_request_cap', __( 'Daily request cap (all conversations)', 'universal-support-chat' ), 1, 100000, 1 );
+		$this->number_range( 'ai_per_conversation_turn_cap', __( 'AI answers per conversation, then always hand off', 'universal-support-chat' ), 1, 100, 1 );
+		printf(
+			'<p class="description">%s</p>',
+			esc_html__( 'A value outside the allowed range is adjusted to the nearest allowed value when you save.', 'universal-support-chat' )
+		);
+	}
+
+	/**
+	 * Renders the provider API-key panel — a separate `admin-post.php` form
+	 * (the token must never touch the sanitised, rendered-back settings
+	 * option). Shows only whether a key is configured, never the key.
+	 */
+	private function render_provider_key_panel(): void {
+		if ( null === $this->provider_keys ) {
+			return;
+		}
+
+		$configured = $this->provider_keys->is_configured();
+		$state      = $configured
+			? __( 'A key is configured.', 'universal-support-chat' )
+			: __( 'No key configured — the AI assistant will not run until one is added.', 'universal-support-chat' );
+
+		echo '<h2>' . esc_html__( 'OpenAI API key', 'universal-support-chat' ) . '</h2>';
+		echo '<p>' . esc_html( $state ) . '</p>';
+
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+		wp_nonce_field( ProviderKeyAction::NONCE );
+		printf( '<input type="hidden" name="action" value="%s" />', esc_attr( ProviderKeyAction::ACTION ) );
+		printf(
+			'<p><label>%s<br /><input type="password" class="regular-text" name="provider_api_key" autocomplete="off" value="" /></label></p>',
+			esc_html__( 'Enter a key to set or replace it (the stored key is never shown):', 'universal-support-chat' )
+		);
+		printf(
+			'<button type="submit" name="provider_key_op" value="set" class="button button-primary">%s</button> ',
+			esc_html( $configured ? esc_html__( 'Replace key', 'universal-support-chat' ) : esc_html__( 'Save key', 'universal-support-chat' ) )
+		);
+		if ( $configured ) {
+			printf(
+				'<button type="submit" name="provider_key_op" value="clear" class="button">%s</button>',
+				esc_html__( 'Remove key', 'universal-support-chat' )
+			);
+		}
+		echo '</form>';
+	}
+
+	/**
 	 * Maps a peer record (or its absence) to a plain operator-facing label.
 	 *
 	 * @param PeerRecord|null $peer The `universal-telegram` peer row, or null.
@@ -799,5 +1004,55 @@ final class SupportChatSettingsPage {
 			(int) ( $values[ $key ] ?? 0 ),
 			esc_html( $description )
 		);
+	}
+
+	/**
+	 * Prints a bounded number field on its own line with an inline label.
+	 *
+	 * @param string $key   Option array key.
+	 * @param string $label Inline label.
+	 * @param int    $min   Inclusive lower bound.
+	 * @param int    $max   Inclusive upper bound.
+	 * @param int    $step  Step.
+	 */
+	private function number_range( string $key, string $label, int $min, int $max, int $step ): void {
+		$values = $this->settings->get();
+		$name   = Settings::OPTION_NAME . '[' . $key . ']';
+
+		printf(
+			'<p><label>%1$s <input type="number" min="%2$d" max="%3$d" step="%4$d" class="small-text" name="%5$s" value="%6$d" /></label></p>',
+			esc_html( $label ),
+			(int) $min,
+			(int) $max,
+			(int) $step,
+			esc_attr( $name ),
+			(int) ( $values[ $key ] ?? 0 )
+		);
+	}
+
+	/**
+	 * Prints a select field from a fixed value => label map, with a hidden
+	 * companion so the key is always present in the POST.
+	 *
+	 * @param string                $key         Option array key.
+	 * @param array<string, string> $options     value => label map.
+	 * @param string                $description Field description text.
+	 */
+	private function select( string $key, array $options, string $description ): void {
+		$values  = $this->settings->get();
+		$current = (string) ( $values[ $key ] ?? '' );
+		$name    = Settings::OPTION_NAME . '[' . $key . ']';
+
+		echo '<select name="' . esc_attr( $name ) . '">';
+		foreach ( $options as $value => $label ) {
+			printf(
+				'<option value="%s"%s>%s</option>',
+				esc_attr( (string) $value ),
+				selected( $current, (string) $value, false ),
+				esc_html( (string) $label )
+			);
+		}
+		echo '</select>';
+		printf( '<p class="description">%s</p>', esc_html( $description ) );
 	}
 }

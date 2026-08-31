@@ -185,4 +185,25 @@ final class WidgetAssetsTest extends TestCase {
 	public function test_css_has_rtl_mirror(): void {
 		$this->assertMatchesRegularExpression( '/\[dir="rtl"\]\s*\.usc-chat\s*\{[^}]*left:\s*1rem/s', $this->css() );
 	}
+
+	public function test_js_renders_the_ai_bubble_and_disclosure_via_textcontent_only(): void {
+		$js = $this->js();
+
+		// An `ai` direction is a recognised bubble kind.
+		$this->assertMatchesRegularExpression( '/known\\s*=\\s*\\{[^}]*ai:\\s*1/', $js );
+		// The one-time disclosure is written with .textContent (ADR-0016).
+		$this->assertStringContainsString( 'function maybeShowDisclosure', $js );
+		$this->assertStringContainsString( 'disclosureEl.textContent = cfg.aiDisclosure', $js );
+		$this->assertStringNotContainsString( 'innerHTML', $js );
+		// The pending state is honest and non-blocking (a status hint only).
+		$this->assertStringContainsString( 'res.data.ai_pending', $js );
+		$this->assertStringContainsString( 'cfg.i18n.aiReplying', $js );
+	}
+
+	public function test_css_has_a_distinct_ai_bubble_and_disclosure(): void {
+		$css = $this->css();
+
+		$this->assertStringContainsString( '.usc-chat__bubble--ai', $css );
+		$this->assertStringContainsString( '.usc-chat__ai-disclosure', $css );
+	}
 }

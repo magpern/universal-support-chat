@@ -54,23 +54,34 @@ final class ConversationDetailPage {
 	private NoteRepository $notes;
 
 	/**
+	 * Optional Hub AI panel (SC-M07). Rendered above the transcript when the
+	 * conversation has had an AI turn.
+	 *
+	 * @var \UniversalSupportChat\AI\Admin\HubAiPanel|null
+	 */
+	private ?\UniversalSupportChat\AI\Admin\HubAiPanel $ai_panel;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param SchemaHealth           $schema_health Schema health.
 	 * @param ConversationRepository $conversations Conversations.
 	 * @param MessageRepository      $messages      Messages.
 	 * @param NoteRepository         $notes         Notes.
+	 * @param \UniversalSupportChat\AI\Admin\HubAiPanel|null $ai_panel Optional AI panel (SC-M07).
 	 */
 	public function __construct(
 		SchemaHealth $schema_health,
 		ConversationRepository $conversations,
 		MessageRepository $messages,
-		NoteRepository $notes
+		NoteRepository $notes,
+		?\UniversalSupportChat\AI\Admin\HubAiPanel $ai_panel = null
 	) {
 		$this->schema_health = $schema_health;
 		$this->conversations = $conversations;
 		$this->messages      = $messages;
 		$this->notes         = $notes;
+		$this->ai_panel      = $ai_panel;
 	}
 
 	/**
@@ -110,6 +121,10 @@ final class ConversationDetailPage {
 		echo '<tr><th>' . esc_html__( 'Updated', 'universal-support-chat' ) . '</th><td>' . esc_html( $conversation->updated_at() ) . '</td></tr>';
 		echo '</tbody></table>';
 
+		if ( null !== $this->ai_panel ) {
+			$this->ai_panel->render( $conversation );
+		}
+
 		$messages = $this->messages->list_for_conversation( $conversation->id(), 0, 500 );
 		echo '<h2>' . esc_html__( 'Transcript', 'universal-support-chat' ) . '</h2>';
 		echo '<div class="usc-hub-transcript" role="log" aria-live="polite">';
@@ -117,9 +132,17 @@ final class ConversationDetailPage {
 			echo '<p>' . esc_html__( 'No messages yet.', 'universal-support-chat' ) . '</p>';
 		}
 		foreach ( $messages as $message ) {
-			$who  = ConversationMessage::DIRECTION_VISITOR === $message->direction()
-				? __( 'Visitor', 'universal-support-chat' )
-				: __( 'Support team', 'universal-support-chat' );
+			switch ( $message->direction() ) {
+				case ConversationMessage::DIRECTION_VISITOR:
+					$who = __( 'Visitor', 'universal-support-chat' );
+					break;
+				case ConversationMessage::DIRECTION_AI:
+					$who = __( 'AI assistant', 'universal-support-chat' );
+					break;
+				default:
+					$who = __( 'Support team', 'universal-support-chat' );
+					break;
+			}
 			$body = $message->plaintext_body();
 			echo '<div class="usc-hub-message usc-hub-message--' . esc_attr( $message->direction() ) . '">';
 			echo '<strong>' . esc_html( $who ) . '</strong> ';

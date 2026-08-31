@@ -259,8 +259,23 @@
 }
 
 .usc-chat__bubble--operator,
+.usc-chat__bubble--ai,
 .usc-chat__bubble--system {
 	align-self: flex-start;
+}
+
+/* SC-M07: the AI-assistant bubble is visually distinct from an operator
+   reply — a tinted background and a marked author line — so a visitor can
+   always tell who is answering. */
+.usc-chat__bubble--ai .usc-chat__bubble-text {
+	background: #eef4ff;
+	background: var(--usc-ai-bg, #eef4ff);
+	border-color: #b9d0f6;
+	border-color: var(--usc-ai-border, #b9d0f6);
+}
+
+.usc-chat__bubble--ai .usc-chat__bubble-author {
+	font-weight: 600;
 }
 
 .usc-chat__bubble-author {
@@ -447,5 +462,24 @@
 }
 
 .usc-chat__offline[hidden] {
+	display: none;
+}
+
+/* SC-M07: the one-time AI disclosure note. Same quiet treatment as the
+   offline note — informational, not an alert. */
+.usc-chat__ai-disclosure {
+	margin: 0;
+	padding: 0.6rem 1rem;
+	font-size: 0.85rem;
+	color: #1a1a1a;
+	color: var(--usc-text, #1a1a1a);
+	background: #eef4ff;
+	background: var(--usc-ai-bg, #eef4ff);
+	border-bottom: 1px solid #d0d0d0;
+	border-bottom: 1px solid var(--usc-border, #d0d0d0);
+	white-space: pre-wrap;
+}
+
+.usc-chat__ai-disclosure[hidden] {
 	display: none;
 }

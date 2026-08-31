@@ -104,6 +104,11 @@ final class WidgetAssets {
 		$offline_message    = null !== $this->availability ? $this->availability->offline_message() : '';
 		$show_online_pill   = null !== $this->availability && $this->availability->online_indicator_enabled();
 
+		// SC-M07 (ADR-0018 §8, R4): the one-time visitor AI disclosure — a
+		// plain-text string rendered by the script with `.textContent`,
+		// shown only when the operator has enabled the AI assistant.
+		$ai_disclosure = ! empty( $settings['ai_enabled'] ) ? (string) $settings['ai_disclosure_text'] : '';
+
 		wp_localize_script(
 			'universal-support-chat-widget',
 			'uscChatWidget',
@@ -126,6 +131,7 @@ final class WidgetAssets {
 				'availability'   => $availability_state,
 				'offlineMessage' => $offline_message,
 				'showOnlinePill' => $show_online_pill,
+				'aiDisclosure'   => $ai_disclosure,
 				'i18n'           => array(
 					'open'             => __( 'Open support chat', 'universal-support-chat' ),
 					'close'            => __( 'Close support chat', 'universal-support-chat' ),
@@ -138,6 +144,8 @@ final class WidgetAssets {
 					'loading'          => __( 'Connecting…', 'universal-support-chat' ),
 					'you'              => __( 'You', 'universal-support-chat' ),
 					'supportTeam'      => __( 'Support team', 'universal-support-chat' ),
+					'aiAssistant'      => __( 'AI assistant', 'universal-support-chat' ),
+					'aiReplying'       => __( 'The assistant is replying…', 'universal-support-chat' ),
 					'errorGeneric'     => __( 'Something went wrong. Please try again.', 'universal-support-chat' ),
 					'errorAuth'        => __( 'Your session expired. Please sign in again.', 'universal-support-chat' ),
 					'errorUnavailable' => __( 'Chat is temporarily unavailable.', 'universal-support-chat' ),
@@ -188,6 +196,7 @@ final class WidgetAssets {
 		echo '</div>';
 
 		echo '<div id="usc-chat-intro" class="usc-chat__intro"></div>';
+		echo '<div id="usc-chat-ai-disclosure" class="usc-chat__ai-disclosure" role="note" hidden></div>';
 		echo '<div id="usc-chat-offline" class="usc-chat__offline" role="note" hidden></div>';
 		echo '<div id="usc-chat-status" class="usc-chat__status" role="status" aria-live="polite"></div>';
 		echo '<div id="usc-chat-messages" class="usc-chat__messages" role="log" aria-live="polite" aria-relevant="additions"></div>';

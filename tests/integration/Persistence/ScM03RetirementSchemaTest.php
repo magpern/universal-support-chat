@@ -37,7 +37,7 @@ final class ScM03RetirementSchemaTest extends WP_UnitTestCase {
 		parent::tear_down();
 	}
 
-	public function test_fresh_migration_reaches_12_and_creates_no_retired_sc_m03_table(): void {
+	public function test_fresh_migration_reaches_target_and_creates_no_retired_sc_m03_table(): void {
 		global $wpdb;
 
 		delete_option( 'universal_support_chat_db_version' );
@@ -45,7 +45,7 @@ final class ScM03RetirementSchemaTest extends WP_UnitTestCase {
 
 		( new Migrator( new MigrationLock() ) )->maybe_migrate();
 
-		$this->assertSame( 12, (int) get_option( 'universal_support_chat_db_version', 0 ) );
+		$this->assertSame( 13, (int) get_option( 'universal_support_chat_db_version', 0 ) );
 
 		foreach ( self::RETIRED_TABLES as $unprefixed ) {
 			$table = $wpdb->prefix . $unprefixed;
@@ -83,7 +83,7 @@ final class ScM03RetirementSchemaTest extends WP_UnitTestCase {
 		$migrator = new Migrator( new MigrationLock() );
 		$migrator->maybe_migrate();
 
-		$this->assertSame( 12, (int) get_option( 'universal_support_chat_db_version', 0 ) );
+		$this->assertSame( 13, (int) get_option( 'universal_support_chat_db_version', 0 ) );
 
 		// The historical table and its row are still present, byte-for-byte.
 		$this->assertSame( $legacy, $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $legacy ) ) );
@@ -98,7 +98,7 @@ final class ScM03RetirementSchemaTest extends WP_UnitTestCase {
 
 		// Re-running is still a no-op.
 		$migrator->maybe_migrate();
-		$this->assertSame( 12, (int) get_option( 'universal_support_chat_db_version', 0 ) );
+		$this->assertSame( 13, (int) get_option( 'universal_support_chat_db_version', 0 ) );
 	}
 
 	private function drop_retired_tables(): void {

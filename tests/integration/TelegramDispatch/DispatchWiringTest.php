@@ -265,6 +265,38 @@ final class DispatchWiringTest extends WP_UnitTestCase {
 		$this->assert_no_telegram_http();
 	}
 
+	public function test_ai_direction_message_is_never_mirrored_to_telegram(): void {
+		// SC-M07 / ADR-0018 §3, R1: an `ai`-direction answer must never open
+		// a channel case. DispatchEnqueuer::is_mirrored_direction() matches
+		// only visitor / operator, so the message commits with NO outbox row
+		// even while dispatch is enabled.
+		$conversation = $this->open_conversation();
+		$message      = $this->enqueuer->persist_and_enqueue(
+			$conversation->uuid(),
+			fn (): ?ConversationMessage => $this->messages->create(
+				$conversation->id(),
+				ConversationMessage::DIRECTION_AI,
+				'AI assistant answer',
+				'stored',
+				null
+			)
+		);
+
+		$this->assertInstanceOf( ConversationMessage::class, $message );
+		$this->assertSame( ConversationMessage::DIRECTION_AI, $message->direction() );
+		$this->assertNull( $this->outbox->find( $message->uuid() ), 'an ai-direction message must not create an outbox row' );
+	}
+
+	public function test_is_mirrored_direction_matches_only_visitor_and_operator(): void {
+		$method = new \ReflectionMethod( DispatchEnqueuer::class, 'is_mirrored_direction' );
+		$method->setAccessible( true );
+
+		$this->assertTrue( $method->invoke( $this->enqueuer, ConversationMessage::DIRECTION_VISITOR ) );
+		$this->assertTrue( $method->invoke( $this->enqueuer, ConversationMessage::DIRECTION_OPERATOR ) );
+		$this->assertFalse( $method->invoke( $this->enqueuer, ConversationMessage::DIRECTION_AI ) );
+		$this->assertFalse( $method->invoke( $this->enqueuer, ConversationMessage::DIRECTION_SYSTEM ) );
+	}
+
 	public function test_commit_and_response_survive_a_broken_async_kick(): void {
 		// Make WP-Cron scheduling itself refuse.
 		add_filter( 'schedule_event', '__return_false' );

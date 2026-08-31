@@ -9,6 +9,8 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Conversations\Rest;
 
+use UniversalSupportChat\AI\Turn\AiResponder;
+use UniversalSupportChat\AI\Turn\AiTurnRepository;
 use UniversalSupportChat\Availability\AvailabilityService;
 use UniversalSupportChat\Conversations\Conversation;
 use UniversalSupportChat\Conversations\ConversationMessage;
@@ -67,6 +69,26 @@ final class ConversationsController {
 	private ?AvailabilityService $availability;
 
 	/**
+	 * Optional AI turn repository (ADR-0018, SC-M07). When present, the poll
+	 * response carries an `ai_pending` flag so the widget can show an honest
+	 * "the assistant is replying" state. Never triggers a provider call —
+	 * that is the async worker's job.
+	 *
+	 * @var AiTurnRepository|null
+	 */
+	private ?AiTurnRepository $ai_turns;
+
+	/**
+	 * Optional AI responder (ADR-0018, SC-M07). When present and the
+	 * conversation is AI-eligible, an accepted visitor message is committed
+	 * together with a queued `ai_turns` row and a non-blocking worker kick —
+	 * still no provider call in this request.
+	 *
+	 * @var AiResponder|null
+	 */
+	private ?AiResponder $ai_responder;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param SchemaHealth             $schema_health Schema availability gate.
@@ -74,19 +96,41 @@ final class ConversationsController {
 	 * @param MessageRepository        $messages      Message repository.
 	 * @param DispatchEnqueuer|null    $dispatch      Optional Telegram dispatch enqueuer.
 	 * @param AvailabilityService|null $availability   Optional availability service.
+	 * @param AiTurnRepository|null    $ai_turns      Optional AI turn repository (SC-M07).
+	 * @param AiResponder|null         $ai_responder  Optional AI responder (SC-M07).
 	 */
 	public function __construct(
 		SchemaHealth $schema_health,
 		ConversationRepository $conversations,
 		MessageRepository $messages,
 		?DispatchEnqueuer $dispatch = null,
-		?AvailabilityService $availability = null
+		?AvailabilityService $availability = null,
+		?AiTurnRepository $ai_turns = null,
+		?AiResponder $ai_responder = null
 	) {
 		$this->schema_health = $schema_health;
 		$this->conversations = $conversations;
 		$this->messages      = $messages;
 		$this->dispatch      = $dispatch;
 		$this->availability  = $availability;
+		$this->ai_turns      = $ai_turns;
+		$this->ai_responder  = $ai_responder;
+	}
+
+	/**
+	 * The visitor-facing author label for a message direction.
+	 *
+	 * @param string $direction Message direction.
+	 */
+	private static function author_label( string $direction ): string {
+		switch ( $direction ) {
+			case ConversationMessage::DIRECTION_VISITOR:
+				return 'You';
+			case ConversationMessage::DIRECTION_AI:
+				return 'AI assistant';
+			default:
+				return 'Support team';
+		}
 	}
 
 	/**
@@ -281,6 +325,17 @@ final class ConversationsController {
 			// waiting_for_operator as ONE unit of work. A failed transition
 			// rolls the message back — no orphan message in the wrong status.
 			$message = $this->persist_visitor_message_offline( $conversation, $create );
+		} elseif ( null !== $this->ai_responder && $this->ai_responder->is_eligible( $conversation ) ) {
+			// SC-M07 (ADR-0018 §2): commit the visitor message, its ADR-0012
+			// outbox row (when dispatch is on), and a queued `ai_turns` row
+			// as ONE unit, then fire a non-blocking worker kick. The provider
+			// is NOT called in this request.
+			$message = $this->ai_responder->persist_with_turn(
+				$conversation->uuid(),
+				$conversation->id(),
+				$user_id,
+				$create
+			);
 		} else {
 			// When Telegram dispatch is enabled the message row and its
 			// outbox row are written in one transaction (ADR-0012);
@@ -411,9 +466,7 @@ final class ConversationsController {
 				'id'             => $message->id(),
 				'message_uuid'   => $message->uuid(),
 				'direction'      => $message->direction(),
-				'author_label'   => ConversationMessage::DIRECTION_VISITOR === $message->direction()
-					? 'You'
-					: 'Support team',
+				'author_label'   => self::author_label( $message->direction() ),
 				'text'           => $message->plaintext_body(),
 				'created_at'     => $message->created_at(),
 				'delivery_state' => $message->delivery_state(),
@@ -425,6 +478,7 @@ final class ConversationsController {
 				'status'       => $conversation->status(),
 				'messages'     => $payload,
 				'availability' => $this->availability_state(),
+				'ai_pending'   => null !== $this->ai_turns && $this->ai_turns->has_pending_turn( $conversation->id() ),
 			)
 		);
 	}

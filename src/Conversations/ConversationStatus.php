@@ -10,10 +10,13 @@ declare( strict_types=1 );
 namespace UniversalSupportChat\Conversations;
 
 /**
- * Status vocabulary for SC-M01. SC-M06 (ADR-0017) adds exactly one edge —
+ * Status vocabulary for SC-M01. SC-M06 (ADR-0017) adds the edge
  * `new -> waiting_for_operator` — so a visitor's first message left while
  * the server resolves availability as `unavailable` lands directly in the
  * operator waiting queue, with no synthetic intermediate `open` state.
+ * SC-M07 (ADR-0018) adds `waiting_for_visitor -> waiting_for_operator` so an
+ * AI handoff (or a takeover) can move an already-active conversation into
+ * the waiting queue from any active status.
  */
 final class ConversationStatus {
 
@@ -33,7 +36,7 @@ final class ConversationStatus {
 		return array(
 			self::NEW                  => array( self::OPEN, self::WAITING_FOR_OPERATOR, self::ARCHIVED ),
 			self::OPEN                 => array( self::WAITING_FOR_VISITOR, self::WAITING_FOR_OPERATOR, self::RESOLVED, self::ARCHIVED ),
-			self::WAITING_FOR_VISITOR  => array( self::OPEN, self::RESOLVED, self::ARCHIVED ),
+			self::WAITING_FOR_VISITOR  => array( self::OPEN, self::WAITING_FOR_OPERATOR, self::RESOLVED, self::ARCHIVED ),
 			self::WAITING_FOR_OPERATOR => array( self::OPEN, self::RESOLVED, self::ARCHIVED ),
 			self::RESOLVED             => array( self::ARCHIVED, self::OPEN ),
 			self::ARCHIVED             => array(),

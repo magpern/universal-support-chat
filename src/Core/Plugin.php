@@ -9,6 +9,23 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Core;
 
+use UniversalSupportChat\AI\Admin\KnowledgeAdminAction;
+use UniversalSupportChat\AI\Admin\KnowledgeAdminPage;
+use UniversalSupportChat\AI\Admin\ProviderKeyAction;
+use UniversalSupportChat\AI\Admin\TakeoverAction;
+use UniversalSupportChat\AI\Admin\HubAiPanel;
+use UniversalSupportChat\AI\Knowledge\KnowledgeIndexer;
+use UniversalSupportChat\AI\Knowledge\KnowledgeRetriever;
+use UniversalSupportChat\AI\Knowledge\KnowledgeSourceRepository;
+use UniversalSupportChat\AI\Policy\AiSystemPolicy;
+use UniversalSupportChat\AI\Policy\PromptAssembler;
+use UniversalSupportChat\AI\Provider\OpenAiChatProvider;
+use UniversalSupportChat\AI\Provider\ProviderKeyManager;
+use UniversalSupportChat\AI\Turn\AiResponder;
+use UniversalSupportChat\AI\Turn\AiTurnRateLimiter;
+use UniversalSupportChat\AI\Turn\AiTurnRepository;
+use UniversalSupportChat\AI\Turn\AiTurnWorker;
+use UniversalSupportChat\AI\Turn\SafetyClassifier;
 use UniversalSupportChat\Administration\Compat\LegacySettingsRedirect;
 use UniversalSupportChat\Administration\Conversations\ConversationDetailPage;
 use UniversalSupportChat\Administration\Conversations\ConversationInboxPage;
@@ -201,11 +218,46 @@ final class Plugin {
 		// logic lives in AvailabilityResolver. Nothing here touches an adapter.
 		$availability = new AvailabilityService( $settings, new AvailabilityResolver(), $audit );
 
+		// SC-M07 (ADR-0018): AI-first visitor support. Disabled by default
+		// (`ai_enabled`) and inert until an operator also configures a
+		// provider key. The provider is NEVER called in a visitor request:
+		// AiResponder commits the message + a queued `ai_turns` row and fires
+		// a non-blocking kick; AiTurnWorker (a WP-Cron worker on the
+		// DispatchWorker pattern) does all provider I/O and runs the
+		// escalation state machine. `ai`-direction answers are structurally
+		// never mirrored to Telegram (is_mirrored_direction()).
+		$ai_keys         = new ProviderKeyManager( $vault );
+		$ai_turns        = new AiTurnRepository();
+		$ai_knowledge    = new KnowledgeSourceRepository( $vault );
+		$ai_rate_limiter = new AiTurnRateLimiter( $ai_turns );
+		$ai_indexer      = new KnowledgeIndexer( $ai_knowledge, $audit );
+		$ai_responder    = new AiResponder( $settings, $ai_keys, $ai_turns, $ai_rate_limiter, $dispatch_enqueuer );
+
 		( new PluginActionLinks( UNIVERSAL_SUPPORT_CHAT_PLUGIN_FILE ) )->register();
-		( new ConversationsController( $schema_health, $conversations, $messages, $dispatch_enqueuer, $availability ) )->register();
-		( new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit, $dispatch_outbox, $availability ) )->register();
+		( new ConversationsController( $schema_health, $conversations, $messages, $dispatch_enqueuer, $availability, $ai_turns, $ai_responder ) )->register();
+		( new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit, $dispatch_outbox, $availability, $ai_turns ) )->register();
 		( new OverrideAction( $audit ) )->register();
 		( new DispatchWorker( $dispatch_service ) )->register();
+
+		$ai_indexer->register();
+		( new AiTurnWorker(
+			$settings,
+			$conversations,
+			$messages,
+			$ai_turns,
+			new KnowledgeRetriever( $ai_knowledge ),
+			new AiSystemPolicy(),
+			new PromptAssembler(),
+			new OpenAiChatProvider( $ai_keys ),
+			new SafetyClassifier(),
+			$ai_rate_limiter,
+			$availability,
+			$audit
+		) )->register();
+		( new ProviderKeyAction( $ai_keys, $audit ) )->register();
+		( new KnowledgeAdminPage( $ai_knowledge ) )->register();
+		( new KnowledgeAdminAction( $ai_indexer ) )->register();
+		( new TakeoverAction( $conversations, $ai_turns, $audit ) )->register();
 
 		$this->telegram_dispatch_service = $dispatch_service;
 		$this->telegram_dispatch_outbox  = $dispatch_outbox;
@@ -220,10 +272,16 @@ final class Plugin {
 		// registered first so its explicit "Conversations" child label wins.
 		// No new top-level menu is added.
 		$inbox  = new ConversationInboxPage( $schema_health, $conversations, $availability );
-		$detail = new ConversationDetailPage( $schema_health, $conversations, $messages, $notes );
+		$detail = new ConversationDetailPage(
+			$schema_health,
+			$conversations,
+			$messages,
+			$notes,
+			new HubAiPanel( $ai_turns, $ai_knowledge )
+		);
 		( new HubPage( $inbox, $detail ) )->register();
-		( new SupportChatSettingsPage( $settings, $peers, $audit ) )->register();
-		( new DiagnosticsPage( $schema_health, $audit_repo, $vault, $settings, $peers, $dispatch_outbox, $availability ) )->register();
+		( new SupportChatSettingsPage( $settings, $peers, $audit, $ai_keys ) )->register();
+		( new DiagnosticsPage( $schema_health, $audit_repo, $vault, $settings, $peers, $dispatch_outbox, $availability, $ai_keys, $ai_turns, $ai_knowledge ) )->register();
 		( new LegacySettingsRedirect() )->register();
 		( new HubActions( $schema_health, $conversations, $messages, $notes, $audit, $dispatch_enqueuer ) )->register();
 		( new WidgetAssets( $settings, $schema_health, $availability ) )->register();

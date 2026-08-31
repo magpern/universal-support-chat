@@ -23,7 +23,7 @@ final class MigratorTest extends WP_UnitTestCase {
 		$migrator = new Migrator( new MigrationLock() );
 		$migrator->maybe_migrate();
 
-		$this->assertSame( 12, (int) get_option( 'universal_support_chat_db_version', 0 ) );
+		$this->assertSame( 13, (int) get_option( 'universal_support_chat_db_version', 0 ) );
 
 		$columns = $wpdb->get_col(
 			$wpdb->prepare(
@@ -35,7 +35,7 @@ final class MigratorTest extends WP_UnitTestCase {
 		$this->assertContains( 'privacy_classification', $columns );
 
 		$migrator->maybe_migrate();
-		$this->assertSame( 12, (int) get_option( 'universal_support_chat_db_version', 0 ) );
+		$this->assertSame( 13, (int) get_option( 'universal_support_chat_db_version', 0 ) );
 	}
 
 	public function test_upgrade_from_sc_m00_db_version_1_to_4_is_idempotent(): void {
@@ -56,7 +56,7 @@ final class MigratorTest extends WP_UnitTestCase {
 
 		$migrator = new Migrator( new MigrationLock() );
 		$migrator->maybe_migrate();
-		$this->assertSame( 12, (int) get_option( 'universal_support_chat_db_version', 0 ) );
+		$this->assertSame( 13, (int) get_option( 'universal_support_chat_db_version', 0 ) );
 
 		$conv_cols = $wpdb->get_col(
 			$wpdb->prepare(
@@ -89,6 +89,6 @@ final class MigratorTest extends WP_UnitTestCase {
 		$this->assertContains( 'body_ciphertext', $note_cols );
 
 		$migrator->maybe_migrate();
-		$this->assertSame( 12, (int) get_option( 'universal_support_chat_db_version', 0 ) );
+		$this->assertSame( 13, (int) get_option( 'universal_support_chat_db_version', 0 ) );
 	}
 }

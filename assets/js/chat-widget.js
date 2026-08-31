@@ -25,6 +25,21 @@
 		var signinEl = document.getElementById('usc-chat-signin');
 		var onlineEl = document.getElementById('usc-chat-online');
 		var offlineEl = document.getElementById('usc-chat-offline');
+		var disclosureEl = document.getElementById('usc-chat-ai-disclosure');
+
+		// SC-M07: the one-time visitor disclosure that an AI assistant is
+		// answering. Shown once, the first time any AI activity is seen
+		// (an `ai` message, or the server reporting a pending AI turn).
+		// Plain text via .textContent (ADR-0016).
+		var disclosureShown = false;
+		function maybeShowDisclosure() {
+			if (disclosureShown || !disclosureEl || !cfg.aiDisclosure) {
+				return;
+			}
+			disclosureShown = true;
+			disclosureEl.textContent = cfg.aiDisclosure;
+			disclosureEl.hidden = false;
+		}
 
 		// Operator greeting: set once during init, before the panel can open,
 		// so aria-describedby="usc-chat-intro" resolves to real text the moment
@@ -110,14 +125,24 @@
 			}
 
 			var wrap = document.createElement('div');
-			var direction = msg.direction === 'visitor' ? 'visitor' : 'operator';
+			var known = { visitor: 1, operator: 1, ai: 1, system: 1 };
+			var direction = known[msg.direction] ? msg.direction : 'operator';
 			wrap.className = 'usc-chat__bubble usc-chat__bubble--' + direction;
+
+			if (direction === 'ai') {
+				maybeShowDisclosure();
+			}
+
+			var fallbackAuthor = cfg.i18n.supportTeam;
+			if (direction === 'visitor') {
+				fallbackAuthor = cfg.i18n.you;
+			} else if (direction === 'ai') {
+				fallbackAuthor = cfg.i18n.aiAssistant;
+			}
 
 			var author = document.createElement('span');
 			author.className = 'usc-chat__bubble-author';
-			author.textContent =
-				msg.author_label ||
-				(direction === 'visitor' ? cfg.i18n.you : cfg.i18n.supportTeam);
+			author.textContent = msg.author_label || fallbackAuthor;
 
 			var text = document.createElement('span');
 			text.className = 'usc-chat__bubble-text';
@@ -217,6 +242,16 @@
 					appendMessage(list[i]);
 					if (list[i].direction !== 'visitor') {
 						setStatus('');
+					}
+				}
+				// SC-M07: an honest "the assistant is replying" hint while the
+				// server has an AI turn queued for this conversation. Never
+				// blocks input; cleared as soon as the answer (or a handoff
+				// message) arrives above.
+				if (res.data.ai_pending) {
+					maybeShowDisclosure();
+					if (!stickyStatus) {
+						setStatus(cfg.i18n.aiReplying || '', false);
 					}
 				}
 			}).catch(function () {

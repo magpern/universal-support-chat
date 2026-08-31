@@ -52,6 +52,24 @@ final class Settings {
 	public const DEFAULT_WIDGET_GREETING = 'Hi — how can we help?';
 
 	/**
+	 * Allowed OpenAI models for the AI-first visitor experience (ADR-0018 §8;
+	 * PO acceptance record `sc-adr-0018-ai-first-po-acceptance.md`). The first
+	 * entry is the default.
+	 */
+	public const AI_ALLOWED_MODELS = array( 'gpt-4o-mini', 'gpt-4o' );
+
+	/**
+	 * Default one-time visitor AI disclosure (ADR-0018 §8, R4). Plain literal
+	 * for the same reason as the other defaults; translated where rendered.
+	 */
+	public const DEFAULT_AI_DISCLOSURE = "You're chatting with an AI assistant. Ask for a person any time and we'll connect you to the support team.";
+
+	/**
+	 * Maximum stored length of the AI disclosure text (ADR-0018 §8).
+	 */
+	private const AI_DISCLOSURE_MAX = 500;
+
+	/**
 	 * Registers the option with the Settings API.
 	 */
 	public function register(): void {
@@ -82,7 +100,16 @@ final class Settings {
 	 *   availability_schedule: array<string, array<int, array{start: string, end: string}>>,
 	 *   availability_exceptions: array<string, string|array<int, array{start: string, end: string}>>,
 	 *   availability_offline_message: string,
-	 *   availability_online_indicator: bool
+	 *   availability_online_indicator: bool,
+	 *   ai_enabled: bool,
+	 *   ai_model: string,
+	 *   ai_max_output_tokens: int,
+	 *   ai_request_timeout_seconds: int,
+	 *   ai_max_context_chars: int,
+	 *   ai_max_retries: int,
+	 *   ai_daily_request_cap: int,
+	 *   ai_per_conversation_turn_cap: int,
+	 *   ai_disclosure_text: string
 	 * }
 	 */
 	public function defaults(): array {
@@ -100,6 +127,15 @@ final class Settings {
 			'availability_exceptions'         => array(),
 			'availability_offline_message'    => self::DEFAULT_OFFLINE_MESSAGE,
 			'availability_online_indicator'   => true,
+			'ai_enabled'                      => false,
+			'ai_model'                        => self::AI_ALLOWED_MODELS[0],
+			'ai_max_output_tokens'            => 500,
+			'ai_request_timeout_seconds'      => 20,
+			'ai_max_context_chars'            => 6000,
+			'ai_max_retries'                  => 3,
+			'ai_daily_request_cap'            => 500,
+			'ai_per_conversation_turn_cap'    => 10,
+			'ai_disclosure_text'              => self::DEFAULT_AI_DISCLOSURE,
 		);
 	}
 
@@ -119,7 +155,16 @@ final class Settings {
 	 *   availability_schedule: array<string, array<int, array{start: string, end: string}>>,
 	 *   availability_exceptions: array<string, string|array<int, array{start: string, end: string}>>,
 	 *   availability_offline_message: string,
-	 *   availability_online_indicator: bool
+	 *   availability_online_indicator: bool,
+	 *   ai_enabled: bool,
+	 *   ai_model: string,
+	 *   ai_max_output_tokens: int,
+	 *   ai_request_timeout_seconds: int,
+	 *   ai_max_context_chars: int,
+	 *   ai_max_retries: int,
+	 *   ai_daily_request_cap: int,
+	 *   ai_per_conversation_turn_cap: int,
+	 *   ai_disclosure_text: string
 	 * }
 	 */
 	public function get(): array {
@@ -150,7 +195,16 @@ final class Settings {
 	 *   availability_schedule: array<string, array<int, array{start: string, end: string}>>,
 	 *   availability_exceptions: array<string, string|array<int, array{start: string, end: string}>>,
 	 *   availability_offline_message: string,
-	 *   availability_online_indicator: bool
+	 *   availability_online_indicator: bool,
+	 *   ai_enabled: bool,
+	 *   ai_model: string,
+	 *   ai_max_output_tokens: int,
+	 *   ai_request_timeout_seconds: int,
+	 *   ai_max_context_chars: int,
+	 *   ai_max_retries: int,
+	 *   ai_daily_request_cap: int,
+	 *   ai_per_conversation_turn_cap: int,
+	 *   ai_disclosure_text: string
 	 * }
 	 */
 	public function sanitize( $input ): array {
@@ -200,7 +254,77 @@ final class Settings {
 			'availability_online_indicator'   => array_key_exists( 'availability_online_indicator', $input )
 				? ! empty( $input['availability_online_indicator'] )
 				: $defaults['availability_online_indicator'],
+			'ai_enabled'                      => array_key_exists( 'ai_enabled', $input )
+				? ! empty( $input['ai_enabled'] )
+				: $defaults['ai_enabled'],
+			'ai_model'                        => array_key_exists( 'ai_model', $input )
+				? $this->enum_value( $input['ai_model'], self::AI_ALLOWED_MODELS, $defaults['ai_model'] )
+				: $defaults['ai_model'],
+			'ai_max_output_tokens'            => array_key_exists( 'ai_max_output_tokens', $input )
+				? $this->clamped_int( $input['ai_max_output_tokens'], 64, 2000, $defaults['ai_max_output_tokens'] )
+				: $defaults['ai_max_output_tokens'],
+			'ai_request_timeout_seconds'      => array_key_exists( 'ai_request_timeout_seconds', $input )
+				? $this->clamped_int( $input['ai_request_timeout_seconds'], 5, 60, $defaults['ai_request_timeout_seconds'] )
+				: $defaults['ai_request_timeout_seconds'],
+			'ai_max_context_chars'            => array_key_exists( 'ai_max_context_chars', $input )
+				? $this->clamped_int( $input['ai_max_context_chars'], 500, 20000, $defaults['ai_max_context_chars'] )
+				: $defaults['ai_max_context_chars'],
+			'ai_max_retries'                  => array_key_exists( 'ai_max_retries', $input )
+				? $this->clamped_int( $input['ai_max_retries'], 0, 6, $defaults['ai_max_retries'] )
+				: $defaults['ai_max_retries'],
+			'ai_daily_request_cap'            => array_key_exists( 'ai_daily_request_cap', $input )
+				? $this->clamped_int( $input['ai_daily_request_cap'], 1, 100000, $defaults['ai_daily_request_cap'] )
+				: $defaults['ai_daily_request_cap'],
+			'ai_per_conversation_turn_cap'    => array_key_exists( 'ai_per_conversation_turn_cap', $input )
+				? $this->clamped_int( $input['ai_per_conversation_turn_cap'], 1, 100, $defaults['ai_per_conversation_turn_cap'] )
+				: $defaults['ai_per_conversation_turn_cap'],
+			'ai_disclosure_text'              => array_key_exists( 'ai_disclosure_text', $input )
+				? $this->ai_disclosure( $input['ai_disclosure_text'], $defaults['ai_disclosure_text'] )
+				: $defaults['ai_disclosure_text'],
 		);
+	}
+
+	/**
+	 * Clamps a numeric setting into `[min, max]`. A non-numeric or
+	 * out-of-range value becomes the default and is never persisted verbatim
+	 * (ADR-0018 §8).
+	 *
+	 * @param mixed $value    Raw value.
+	 * @param int   $min      Inclusive lower bound.
+	 * @param int   $max      Inclusive upper bound.
+	 * @param int   $fallback Default when non-numeric.
+	 */
+	private function clamped_int( $value, int $min, int $max, int $fallback ): int {
+		if ( ! is_numeric( $value ) ) {
+			return $fallback;
+		}
+
+		return max( $min, min( $max, (int) $value ) );
+	}
+
+	/**
+	 * Returns the value if it is in the allow-list, otherwise the fallback.
+	 *
+	 * @param mixed             $value    Raw value.
+	 * @param array<int, string> $allowed Permitted values.
+	 * @param string            $fallback Default when not permitted.
+	 */
+	private function enum_value( $value, array $allowed, string $fallback ): string {
+		return ( is_string( $value ) && in_array( $value, $allowed, true ) ) ? $value : $fallback;
+	}
+
+	/**
+	 * Sanitizes the AI disclosure: plain multiline text, length-capped, never
+	 * empty (a blank value falls back to the default so a visitor is always
+	 * shown an honest disclosure).
+	 *
+	 * @param mixed  $value    Raw value.
+	 * @param string $fallback Default disclosure.
+	 */
+	private function ai_disclosure( $value, string $fallback ): string {
+		$clean = $this->plain_multiline_text( $value, self::AI_DISCLOSURE_MAX );
+
+		return '' === trim( $clean ) ? $fallback : $clean;
 	}
 
 	/**

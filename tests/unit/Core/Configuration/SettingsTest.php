@@ -25,7 +25,7 @@ final class SettingsTest extends TestCase {
 	public function test_defaults_include_the_three_widget_presentation_keys(): void {
 		$defaults = ( new Settings() )->defaults();
 
-		$this->assertCount( 13, $defaults );
+		$this->assertCount( 22, $defaults );
 		$this->assertSame( '', $defaults['widget_title'] );
 		$this->assertSame( 'Hi — how can we help?', $defaults['widget_greeting'] );
 		$this->assertSame( 0, $defaults['widget_avatar_attachment_id'] );
@@ -39,7 +39,7 @@ final class SettingsTest extends TestCase {
 			)
 		);
 
-		$this->assertCount( 13, $result );
+		$this->assertCount( 22, $result );
 		$this->assertArrayNotHasKey( 'nope', $result );
 		$this->assertSame(
 			array(
@@ -56,6 +56,15 @@ final class SettingsTest extends TestCase {
 				'availability_exceptions',
 				'availability_offline_message',
 				'availability_online_indicator',
+				'ai_enabled',
+				'ai_model',
+				'ai_max_output_tokens',
+				'ai_request_timeout_seconds',
+				'ai_max_context_chars',
+				'ai_max_retries',
+				'ai_daily_request_cap',
+				'ai_per_conversation_turn_cap',
+				'ai_disclosure_text',
 			),
 			array_keys( $result )
 		);

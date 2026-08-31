@@ -29,6 +29,8 @@ class Migrator {
 	public const LEGACY_MIGRATION_BATCH_LOG_TABLE   = 'universal_support_chat_legacy_migration_batch_log';
 	public const LEGACY_HANDOFF_MAP_TABLE           = 'universal_support_chat_legacy_handoff_map';
 	public const TELEGRAM_DISPATCH_TABLE            = 'universal_support_chat_telegram_dispatch';
+	public const AI_TURNS_TABLE                     = 'universal_support_chat_ai_turns';
+	public const AI_KNOWLEDGE_SOURCES_TABLE         = 'universal_support_chat_knowledge_sources';
 
 	private const DB_VERSION_OPTION = 'universal_support_chat_db_version';
 
@@ -52,7 +54,7 @@ class Migrator {
 	 * Highest step number this migrator knows how to run.
 	 */
 	protected function target_version(): int {
-		return 12;
+		return 13;
 	}
 
 	/**
@@ -123,6 +125,7 @@ class Migrator {
 			10 => array( array( $this, 'step_10_add_legacy_migration_map_binding_columns' ), array( $this, 'verify_step_10' ) ),
 			11 => array( array( $this, 'step_11_create_legacy_handoff_map_table' ), array( $this, 'verify_step_11' ) ),
 			12 => array( array( $this, 'step_12_create_telegram_dispatch_table' ), array( $this, 'verify_step_12' ) ),
+			13 => array( array( $this, 'step_13_create_ai_tables' ), array( $this, 'verify_step_13' ) ),
 		);
 
 		if ( ! isset( $steps[ $number ] ) ) {
@@ -729,6 +732,210 @@ class Migrator {
 		$forbidden_content_columns = array( 'body', 'body_ciphertext', 'plaintext', 'content_hash', 'digest', 'text' );
 
 		return $columns_ok && ! $this->table_has_any_column( $table, $forbidden_content_columns );
+	}
+
+	/**
+	 * Creates the SC-M07 AI-first visitor support tables (ADR-0018,
+	 * migration step 13):
+	 *
+	 * - `ai_turns` — metadata only. One row per AI turn queued from a visitor
+	 *   message. No prompt, no answer, no visitor text, no retrieved content:
+	 *   the answer lives only as an `ai`-direction row in the encrypted
+	 *   messages table; the prompt is never persisted anywhere. Every column
+	 *   is an id, uuid, fixed-vocabulary string, small int, count, or
+	 *   timestamp, plus the `source_ids` / `source_checksums` provenance
+	 *   references (comma-joined integer ids and SHA-256 hex prefixes).
+	 * - `knowledge_sources` — encrypted content only. The approved plain-text
+	 *   snapshot lives solely in `indexed_text_ciphertext` as a
+	 *   {@see \UniversalSupportChat\Core\Security\CredentialVault} envelope
+	 *   (AAD context `knowledge_source:<source_uuid>`). No plaintext content
+	 *   column, and no visitor / PII column.
+	 *
+	 * Table-specific verification is enforced in {@see verify_step_13()}.
+	 */
+	private function step_13_create_ai_tables(): void {
+		global $wpdb;
+
+		$charset_collate = $wpdb->get_charset_collate();
+		$turns           = $wpdb->prefix . self::AI_TURNS_TABLE;
+		$sources         = $wpdb->prefix . self::AI_KNOWLEDGE_SOURCES_TABLE;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$turns} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				turn_uuid CHAR(36) NOT NULL,
+				conversation_id BIGINT UNSIGNED NOT NULL,
+				visitor_message_id BIGINT UNSIGNED NULL,
+				ai_message_id BIGINT UNSIGNED NULL,
+				status VARCHAR(16) NOT NULL DEFAULT 'queued',
+				outcome VARCHAR(24) NULL,
+				finish_reason VARCHAR(24) NULL,
+				handoff_reason VARCHAR(32) NULL,
+				provider_error_class VARCHAR(32) NULL,
+				attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+				prompt_tokens INT UNSIGNED NULL,
+				completion_tokens INT UNSIGNED NULL,
+				latency_ms INT UNSIGNED NULL,
+				source_ids VARCHAR(255) NULL,
+				source_checksums VARCHAR(255) NULL,
+				claimed_at DATETIME NULL,
+				lease_expires_at DATETIME NULL,
+				available_at DATETIME NOT NULL,
+				created_at DATETIME NOT NULL,
+				updated_at DATETIME NOT NULL,
+				PRIMARY KEY (id),
+				UNIQUE KEY turn_uuid (turn_uuid),
+				KEY status_due (status, available_at),
+				KEY status_lease (status, lease_expires_at),
+				KEY conversation_id (conversation_id)
+			) {$charset_collate}"
+		);
+
+		$wpdb->query(
+			"CREATE TABLE IF NOT EXISTS {$sources} (
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				source_uuid CHAR(36) NOT NULL,
+				source_type VARCHAR(16) NOT NULL,
+				post_id BIGINT UNSIGNED NULL,
+				label VARCHAR(191) NOT NULL DEFAULT '',
+				indexed_text_ciphertext MEDIUMTEXT NULL,
+				content_checksum CHAR(64) NOT NULL DEFAULT '',
+				status VARCHAR(16) NOT NULL DEFAULT 'approved',
+				approved_by BIGINT UNSIGNED NULL,
+				approved_at DATETIME NULL,
+				last_indexed_at DATETIME NULL,
+				created_at DATETIME NOT NULL,
+				updated_at DATETIME NOT NULL,
+				PRIMARY KEY (id),
+				UNIQUE KEY source_uuid (source_uuid),
+				KEY status (status),
+				KEY post_id (post_id)
+			) {$charset_collate}"
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	/**
+	 * Verifies step 13 — table-specific content-column boundary (ADR-0018
+	 * "Schema verification boundary"):
+	 *
+	 * - `ai_turns` exists and carries **no** free-text/content column
+	 *   (`body`, `prompt`, `response`, `message_text`, `content`, `text`,
+	 *   `plaintext`, `ciphertext`, `transcript`). `*_id` references are
+	 *   metadata and pass.
+	 * - `knowledge_sources` exists, **has** `indexed_text_ciphertext`, and
+	 *   carries **no** plaintext content column and **no** visitor / PII
+	 *   column.
+	 */
+	private function verify_step_13(): bool {
+		global $wpdb;
+
+		$turns   = $wpdb->prefix . self::AI_TURNS_TABLE;
+		$sources = $wpdb->prefix . self::AI_KNOWLEDGE_SOURCES_TABLE;
+
+		$turns_ok = $this->table_has_columns(
+			$turns,
+			array(
+				'id',
+				'turn_uuid',
+				'conversation_id',
+				'visitor_message_id',
+				'ai_message_id',
+				'status',
+				'outcome',
+				'finish_reason',
+				'handoff_reason',
+				'provider_error_class',
+				'attempts',
+				'prompt_tokens',
+				'completion_tokens',
+				'latency_ms',
+				'source_ids',
+				'source_checksums',
+				'claimed_at',
+				'lease_expires_at',
+				'available_at',
+				'created_at',
+				'updated_at',
+			)
+		);
+
+		if ( ! $turns_ok ) {
+			return false;
+		}
+
+		if ( $this->table_has_column_matching(
+			$turns,
+			'/^(body|prompt|response|message_text|content|text|plaintext|ciphertext|transcript)$/'
+		) ) {
+			return false;
+		}
+
+		$sources_ok = $this->table_has_columns(
+			$sources,
+			array(
+				'id',
+				'source_uuid',
+				'source_type',
+				'post_id',
+				'label',
+				'indexed_text_ciphertext',
+				'content_checksum',
+				'status',
+				'approved_by',
+				'approved_at',
+				'last_indexed_at',
+				'created_at',
+				'updated_at',
+			)
+		);
+
+		if ( ! $sources_ok ) {
+			return false;
+		}
+
+		if ( $this->table_has_column_matching(
+			$sources,
+			'/^(indexed_text|body|raw_content|plaintext|content|snippet_text)$/'
+		) ) {
+			return false;
+		}
+
+		return ! $this->table_has_any_column(
+			$sources,
+			array( 'owner_user_id', 'user_email', 'visitor_email', 'conversation_id', 'message_uuid' )
+		);
+	}
+
+	/**
+	 * Whether a table contains any column whose exact name matches a pattern.
+	 *
+	 * @param string $table   Table name including prefix.
+	 * @param string $pattern A PCRE pattern applied to each column name.
+	 */
+	private function table_has_column_matching( string $table, string $pattern ): bool {
+		global $wpdb;
+
+		$columns = $wpdb->get_col(
+			$wpdb->prepare(
+				'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s',
+				$wpdb->dbname,
+				$table
+			)
+		);
+
+		if ( ! is_array( $columns ) ) {
+			return false;
+		}
+
+		foreach ( $columns as $column ) {
+			if ( 1 === preg_match( $pattern, (string) $column ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
