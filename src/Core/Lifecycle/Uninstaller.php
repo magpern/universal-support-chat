@@ -47,6 +47,14 @@ final class Uninstaller {
 			return;
 		}
 
+		// SC-M07 AI-first visitor support (ADR-0018). `ai_turns` is
+		// metadata-only; `knowledge_sources` holds the vault-encrypted
+		// approved snapshots. Both are removed only under the opted-in
+		// `remove_data_on_uninstall` path, alongside the provider-secret
+		// option.
+		$this->drop_table( Migrator::AI_TURNS_TABLE );
+		$this->drop_table( Migrator::AI_KNOWLEDGE_SOURCES_TABLE );
+
 		$this->drop_table( Migrator::TELEGRAM_DISPATCH_TABLE );
 		$this->drop_table( Migrator::AUDIT_LOG_TABLE );
 		$this->drop_table( Migrator::CONVERSATION_NOTES_TABLE );
@@ -74,6 +82,7 @@ final class Uninstaller {
 		delete_option( 'universal_support_chat_migration_lock' );
 		delete_option( 'universal_support_chat_contract_own_key' );
 		delete_option( 'universal_support_chat_contract_own_key_secret' );
+		delete_option( 'universal_support_chat_ai_provider_secret' );
 	}
 
 	/**

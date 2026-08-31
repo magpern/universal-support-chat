@@ -73,10 +73,14 @@ final class ScM03EngineRetirementTest extends TestCase {
 		$this->assertContains( 'dispatch', $names, 'the optional DispatchEnqueuer is still injected' );
 	}
 
-	public function test_schema_version_stays_at_12_and_legacy_manifest_constants_are_retained(): void {
+	public function test_retired_steps_stay_inert_and_legacy_manifest_constants_are_retained(): void {
 		$source = (string) file_get_contents( dirname( __DIR__, 3 ) . '/src/Persistence/Migrator.php' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local read.
 
-		$this->assertMatchesRegularExpression( '/function target_version\(\): int \{\s*return 12;/', $source );
+		// The ADR-0013 retirement itself changed no schema version; SC-M07
+		// (ADR-0018) legitimately advances the target to 13 with migration
+		// step 13 (the AI-first visitor support tables). The retirement
+		// invariants below are unaffected.
+		$this->assertMatchesRegularExpression( '/function target_version\(\): int \{\s*return 13;/', $source );
 
 		// Steps 9-11 are retired inert no-ops (create no obsolete table).
 		$this->assertStringContainsString( 'Retired (ADR-0013)', $source );
