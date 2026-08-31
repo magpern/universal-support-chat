@@ -9,6 +9,7 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Conversations\Rest;
 
+use UniversalSupportChat\AI\Turn\AiTurnRepository;
 use UniversalSupportChat\Availability\AvailabilityService;
 use UniversalSupportChat\Conversations\Conversation;
 use UniversalSupportChat\Conversations\ConversationMessage;
@@ -67,6 +68,16 @@ final class ConversationsController {
 	private ?AvailabilityService $availability;
 
 	/**
+	 * Optional AI turn repository (ADR-0018, SC-M07). When present, the poll
+	 * response carries an `ai_pending` flag so the widget can show an honest
+	 * "the assistant is replying" state. Never triggers a provider call —
+	 * that is the async worker's job.
+	 *
+	 * @var AiTurnRepository|null
+	 */
+	private ?AiTurnRepository $ai_turns;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param SchemaHealth             $schema_health Schema availability gate.
@@ -74,19 +85,38 @@ final class ConversationsController {
 	 * @param MessageRepository        $messages      Message repository.
 	 * @param DispatchEnqueuer|null    $dispatch      Optional Telegram dispatch enqueuer.
 	 * @param AvailabilityService|null $availability   Optional availability service.
+	 * @param AiTurnRepository|null    $ai_turns      Optional AI turn repository (SC-M07).
 	 */
 	public function __construct(
 		SchemaHealth $schema_health,
 		ConversationRepository $conversations,
 		MessageRepository $messages,
 		?DispatchEnqueuer $dispatch = null,
-		?AvailabilityService $availability = null
+		?AvailabilityService $availability = null,
+		?AiTurnRepository $ai_turns = null
 	) {
 		$this->schema_health = $schema_health;
 		$this->conversations = $conversations;
 		$this->messages      = $messages;
 		$this->dispatch      = $dispatch;
 		$this->availability  = $availability;
+		$this->ai_turns      = $ai_turns;
+	}
+
+	/**
+	 * The visitor-facing author label for a message direction.
+	 *
+	 * @param string $direction Message direction.
+	 */
+	private static function author_label( string $direction ): string {
+		switch ( $direction ) {
+			case ConversationMessage::DIRECTION_VISITOR:
+				return 'You';
+			case ConversationMessage::DIRECTION_AI:
+				return 'AI assistant';
+			default:
+				return 'Support team';
+		}
 	}
 
 	/**
@@ -411,9 +441,7 @@ final class ConversationsController {
 				'id'             => $message->id(),
 				'message_uuid'   => $message->uuid(),
 				'direction'      => $message->direction(),
-				'author_label'   => ConversationMessage::DIRECTION_VISITOR === $message->direction()
-					? 'You'
-					: 'Support team',
+				'author_label'   => self::author_label( $message->direction() ),
 				'text'           => $message->plaintext_body(),
 				'created_at'     => $message->created_at(),
 				'delivery_state' => $message->delivery_state(),
@@ -425,6 +453,7 @@ final class ConversationsController {
 				'status'       => $conversation->status(),
 				'messages'     => $payload,
 				'availability' => $this->availability_state(),
+				'ai_pending'   => null !== $this->ai_turns && $this->ai_turns->has_pending_turn( $conversation->id() ),
 			)
 		);
 	}

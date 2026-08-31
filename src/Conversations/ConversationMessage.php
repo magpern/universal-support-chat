@@ -19,6 +19,15 @@ final class ConversationMessage {
 	public const DIRECTION_SYSTEM   = 'system';
 
 	/**
+	 * An answer from the AI assistant (ADR-0018 §3, SC-M07). A new value of
+	 * the existing free-form `VARCHAR(16)` direction column — no schema
+	 * change. Never mirrored to Telegram: `DispatchEnqueuer::is_mirrored_direction()`
+	 * matches only `visitor` / `operator`, so an `ai` message structurally
+	 * never opens a channel case (master-plan R1).
+	 */
+	public const DIRECTION_AI = 'ai';
+
+	/**
 	 * Primary key.
 	 *
 	 * @var int

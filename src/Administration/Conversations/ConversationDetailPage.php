@@ -117,9 +117,17 @@ final class ConversationDetailPage {
 			echo '<p>' . esc_html__( 'No messages yet.', 'universal-support-chat' ) . '</p>';
 		}
 		foreach ( $messages as $message ) {
-			$who  = ConversationMessage::DIRECTION_VISITOR === $message->direction()
-				? __( 'Visitor', 'universal-support-chat' )
-				: __( 'Support team', 'universal-support-chat' );
+			switch ( $message->direction() ) {
+				case ConversationMessage::DIRECTION_VISITOR:
+					$who = __( 'Visitor', 'universal-support-chat' );
+					break;
+				case ConversationMessage::DIRECTION_AI:
+					$who = __( 'AI assistant', 'universal-support-chat' );
+					break;
+				default:
+					$who = __( 'Support team', 'universal-support-chat' );
+					break;
+			}
 			$body = $message->plaintext_body();
 			echo '<div class="usc-hub-message usc-hub-message--' . esc_attr( $message->direction() ) . '">';
 			echo '<strong>' . esc_html( $who ) . '</strong> ';
