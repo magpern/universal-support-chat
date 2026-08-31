@@ -2,7 +2,13 @@
 
 ## Status
 
-Planned
+Closed (PASS WITH LIMITATIONS) — implementation [PR #53](https://github.com/magpern/universal-support-chat/pull/53)
+squash-merged to `main` at `f3b327b79185f02130571a8cdc074b77b8e094f9`; closure
+[`docs/closure/sc-m06-support-availability-and-offline-tickets-closure.md`](../closure/sc-m06-support-availability-and-offline-tickets-closure.md).
+Accepted limitations: browser QA to the SC-M05 standard and a VoiceOver/NVDA smoke of the
+offline widget state — both recommended post-merge, neither run in the implementation
+environment. **DEV deployment and Product Owner acceptance remain outstanding** and will be
+recorded separately.
 
 Depends on: SC-M02; soft dependency on SC-M04 for telegram-optional proof
 
