@@ -9,6 +9,7 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Conversations\Rest;
 
+use UniversalSupportChat\Availability\AvailabilityService;
 use UniversalSupportChat\Conversations\Conversation;
 use UniversalSupportChat\Conversations\ConversationMessage;
 use UniversalSupportChat\Conversations\ConversationRepository;
@@ -58,23 +59,34 @@ final class ConversationsController {
 	private ?DispatchEnqueuer $dispatch;
 
 	/**
+	 * Optional availability service (ADR-0017). When absent the controller
+	 * behaves exactly as it did before SC-M06 (every request is "available").
+	 *
+	 * @var AvailabilityService|null
+	 */
+	private ?AvailabilityService $availability;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param SchemaHealth           $schema_health Schema availability gate.
-	 * @param ConversationRepository $conversations Conversation repository.
-	 * @param MessageRepository      $messages      Message repository.
-	 * @param DispatchEnqueuer|null  $dispatch      Optional Telegram dispatch enqueuer.
+	 * @param SchemaHealth             $schema_health Schema availability gate.
+	 * @param ConversationRepository   $conversations Conversation repository.
+	 * @param MessageRepository        $messages      Message repository.
+	 * @param DispatchEnqueuer|null    $dispatch      Optional Telegram dispatch enqueuer.
+	 * @param AvailabilityService|null $availability   Optional availability service.
 	 */
 	public function __construct(
 		SchemaHealth $schema_health,
 		ConversationRepository $conversations,
 		MessageRepository $messages,
-		?DispatchEnqueuer $dispatch = null
+		?DispatchEnqueuer $dispatch = null,
+		?AvailabilityService $availability = null
 	) {
 		$this->schema_health = $schema_health;
 		$this->conversations = $conversations;
 		$this->messages      = $messages;
 		$this->dispatch      = $dispatch;
+		$this->availability  = $availability;
 	}
 
 	/**
@@ -153,13 +165,23 @@ final class ConversationsController {
 				if ( $existing->owner_user_id() !== $user_id ) {
 					return $this->not_found();
 				}
-				return $this->ok( array( 'conversation_uuid' => $existing->uuid() ) );
+				return $this->ok(
+					array(
+						'conversation_uuid' => $existing->uuid(),
+						'availability'      => $this->availability_state(),
+					)
+				);
 			}
 		}
 
 		$active = $this->conversations->find_active_for_owner( $user_id );
 		if ( null !== $active ) {
-			return $this->ok( array( 'conversation_uuid' => $active->uuid() ) );
+			return $this->ok(
+				array(
+					'conversation_uuid' => $active->uuid(),
+					'availability'      => $this->availability_state(),
+				)
+			);
 		}
 
 		$created = $this->conversations->create( $user_id, $idempotency );
@@ -170,7 +192,12 @@ final class ConversationsController {
 		$opened = $this->conversations->transition( $created, ConversationStatus::OPEN );
 		$final  = $opened ?? $created;
 
-		return $this->ok( array( 'conversation_uuid' => $final->uuid() ) );
+		return $this->ok(
+			array(
+				'conversation_uuid' => $final->uuid(),
+				'availability'      => $this->availability_state(),
+			)
+		);
 	}
 
 	/**
@@ -244,30 +271,113 @@ final class ConversationsController {
 			$idempotency
 		);
 
-		// When Telegram dispatch is enabled the message row and its outbox
-		// row are written in one transaction (ADR-0012); otherwise this is
-		// a plain message create.
-		$message = null !== $this->dispatch
-			? $this->dispatch->persist_and_enqueue( $conversation->uuid(), $create )
-			: $create();
+		// Availability is resolved authoritatively on the server (ADR-0017
+		// §7); anything the browser believed is presentation only.
+		$unavailable = null !== $this->availability && $this->availability->is_unavailable();
+
+		if ( $unavailable ) {
+			// Offline ticket: commit the message, its ADR-0012 outbox row
+			// (only when dispatch is enabled), and the transition to
+			// waiting_for_operator as ONE unit of work. A failed transition
+			// rolls the message back — no orphan message in the wrong status.
+			$message = $this->persist_visitor_message_offline( $conversation, $create );
+		} else {
+			// When Telegram dispatch is enabled the message row and its
+			// outbox row are written in one transaction (ADR-0012);
+			// otherwise this is a plain message create.
+			$message = null !== $this->dispatch
+				? $this->dispatch->persist_and_enqueue( $conversation->uuid(), $create )
+				: $create();
+		}
 
 		if ( null === $message ) {
 			return $this->error( 'request_failed', 503 );
 		}
 
-		if ( ConversationStatus::NEW === $conversation->status() ) {
-			$this->conversations->transition( $conversation, ConversationStatus::OPEN );
-		} elseif ( ConversationStatus::WAITING_FOR_VISITOR === $conversation->status() ) {
-			$this->conversations->transition( $conversation, ConversationStatus::OPEN );
-		} else {
-			$this->conversations->touch( $conversation );
+		if ( ! $unavailable ) {
+			if ( ConversationStatus::NEW === $conversation->status() ) {
+				$this->conversations->transition( $conversation, ConversationStatus::OPEN );
+			} elseif ( ConversationStatus::WAITING_FOR_VISITOR === $conversation->status() ) {
+				$this->conversations->transition( $conversation, ConversationStatus::OPEN );
+			} else {
+				$this->conversations->touch( $conversation );
+			}
 		}
 
 		return $this->ok(
 			array(
 				'message_uuid' => $message->uuid(),
+				'availability' => $unavailable ? 'unavailable' : 'available',
 			)
 		);
+	}
+
+	/**
+	 * Commits a visitor message left while the team is unavailable together
+	 * with the conversation transition to `waiting_for_operator`, in one
+	 * transaction (ADR-0017 §7). When a dispatch enqueuer is wired the
+	 * commit also carries the content-free ADR-0012 outbox row; when it is
+	 * not (a lean test harness) the message + transition are still atomic.
+	 *
+	 * @param Conversation                          $conversation Owned, non-terminal conversation.
+	 * @param callable(): (ConversationMessage|null) $create       Creates the visitor message row.
+	 */
+	private function persist_visitor_message_offline( Conversation $conversation, callable $create ): ?ConversationMessage {
+		$transition = function ( ConversationMessage $message ) use ( $conversation ): bool {
+			unset( $message );
+
+			if ( ConversationStatus::WAITING_FOR_OPERATOR === $conversation->status() ) {
+				$this->conversations->touch( $conversation );
+
+				return true;
+			}
+
+			return null !== $this->conversations->transition( $conversation, ConversationStatus::WAITING_FOR_OPERATOR );
+		};
+
+		if ( null !== $this->dispatch ) {
+			return $this->dispatch->persist_and_enqueue( $conversation->uuid(), $create, $transition );
+		}
+
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- transaction control statement.
+		$wpdb->query( 'START TRANSACTION' );
+
+		try {
+			$message = $create();
+
+			if ( ! $message instanceof ConversationMessage ) {
+				// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- transaction control statement.
+				$wpdb->query( 'ROLLBACK' );
+
+				return null;
+			}
+
+			if ( ! $transition( $message ) ) {
+				// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- transaction control statement.
+				$wpdb->query( 'ROLLBACK' );
+
+				return null;
+			}
+		} catch ( \Throwable $exception ) {
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- transaction control statement.
+			$wpdb->query( 'ROLLBACK' );
+
+			throw $exception;
+		}
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- transaction control statement.
+		$wpdb->query( 'COMMIT' );
+
+		return $message;
+	}
+
+	/**
+	 * The resolved availability state as a wire string.
+	 */
+	private function availability_state(): string {
+		return null !== $this->availability && $this->availability->is_unavailable() ? 'unavailable' : 'available';
 	}
 
 	/**
@@ -312,8 +422,9 @@ final class ConversationsController {
 
 		return $this->ok(
 			array(
-				'status'   => $conversation->status(),
-				'messages' => $payload,
+				'status'       => $conversation->status(),
+				'messages'     => $payload,
+				'availability' => $this->availability_state(),
 			)
 		);
 	}

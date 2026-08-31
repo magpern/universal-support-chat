@@ -9,6 +9,7 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\ChatWidget;
 
+use UniversalSupportChat\Availability\AvailabilityService;
 use UniversalSupportChat\Conversations\Rest\ConversationsController;
 use UniversalSupportChat\Core\Configuration\Settings;
 use UniversalSupportChat\Persistence\SchemaHealth;
@@ -40,14 +41,24 @@ final class WidgetAssets {
 	private SchemaHealth $schema_health;
 
 	/**
+	 * Availability service (ADR-0017), or null (then the widget makes no
+	 * availability claim and behaves exactly as before SC-M06).
+	 *
+	 * @var AvailabilityService|null
+	 */
+	private ?AvailabilityService $availability;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Settings     $settings      Settings.
-	 * @param SchemaHealth $schema_health Schema health.
+	 * @param Settings                 $settings      Settings.
+	 * @param SchemaHealth             $schema_health Schema health.
+	 * @param AvailabilityService|null $availability   Optional availability service.
 	 */
-	public function __construct( Settings $settings, SchemaHealth $schema_health ) {
+	public function __construct( Settings $settings, SchemaHealth $schema_health, ?AvailabilityService $availability = null ) {
 		$this->settings      = $settings;
 		$this->schema_health = $schema_health;
+		$this->availability  = $availability;
 	}
 
 	/**
@@ -89,22 +100,33 @@ final class WidgetAssets {
 		$logged_in    = is_user_logged_in();
 		$presentation = new WidgetPresentation( $settings );
 
+		$availability_state = null !== $this->availability ? $this->availability->resolve_state()->value : 'available';
+		$offline_message    = null !== $this->availability ? $this->availability->offline_message() : '';
+		$show_online_pill   = null !== $this->availability && $this->availability->online_indicator_enabled();
+
 		wp_localize_script(
 			'universal-support-chat-widget',
 			'uscChatWidget',
 			array(
-				'restBase'     => esc_url_raw( rest_url( ConversationsController::ROUTE_NAMESPACE ) ),
-				'nonce'        => $logged_in ? wp_create_nonce( 'wp_rest' ) : '',
-				'loggedIn'     => $logged_in,
-				'schemaOk'     => $this->schema_health->is_available(),
-				'loginUrl'     => esc_url_raw( wp_login_url( get_permalink() ? (string) get_permalink() : home_url( '/' ) ) ),
-				'pollInterval' => 4000,
+				'restBase'       => esc_url_raw( rest_url( ConversationsController::ROUTE_NAMESPACE ) ),
+				'nonce'          => $logged_in ? wp_create_nonce( 'wp_rest' ) : '',
+				'loggedIn'       => $logged_in,
+				'schemaOk'       => $this->schema_health->is_available(),
+				'loginUrl'       => esc_url_raw( wp_login_url( get_permalink() ? (string) get_permalink() : home_url( '/' ) ) ),
+				'pollInterval'   => 4000,
 				// Operator-authored greeting: a raw plain-text string, rendered
 				// by the widget script with `.textContent` (ADR-0016). The
 				// resolved title and the avatar URL are deliberately NOT in
 				// this payload — both are rendered server-side only.
-				'greeting'     => $presentation->greeting(),
-				'i18n'         => array(
+				'greeting'       => $presentation->greeting(),
+				// ADR-0017: the server-resolved availability state, the
+				// operator-authored offline message (plain text, rendered by
+				// the script with `.textContent`), and whether the subtle
+				// "online" pill may be shown (only ever while truly available).
+				'availability'   => $availability_state,
+				'offlineMessage' => $offline_message,
+				'showOnlinePill' => $show_online_pill,
+				'i18n'           => array(
 					'open'             => __( 'Open support chat', 'universal-support-chat' ),
 					'close'            => __( 'Close support chat', 'universal-support-chat' ),
 					'title'            => __( 'Support chat', 'universal-support-chat' ),
@@ -120,6 +142,8 @@ final class WidgetAssets {
 					'errorAuth'        => __( 'Your session expired. Please sign in again.', 'universal-support-chat' ),
 					'errorUnavailable' => __( 'Chat is temporarily unavailable.', 'universal-support-chat' ),
 					'empty'            => __( 'No messages yet. Say hello.', 'universal-support-chat' ),
+					'online'           => __( 'We’re online', 'universal-support-chat' ),
+					'offlineConfirm'   => __( 'Message received — we’ll reply here when we’re back.', 'universal-support-chat' ),
 				),
 			)
 		);
@@ -157,12 +181,14 @@ final class WidgetAssets {
 			echo '<img class="usc-chat__avatar" alt="" src="' . esc_url( $avatar_url ) . '" width="28" height="28" />';
 		}
 		echo '<h2 id="usc-chat-title" class="usc-chat__title">' . esc_html( $title ) . '</h2>';
+		echo '<span id="usc-chat-online" class="usc-chat__online" hidden></span>';
 		echo '<button type="button" class="usc-chat__close" id="usc-chat-close" aria-label="' . esc_attr( $close_label ) . '">';
 		echo self::icon_close(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static original inline SVG, no dynamic data.
 		echo '</button>';
 		echo '</div>';
 
 		echo '<div id="usc-chat-intro" class="usc-chat__intro"></div>';
+		echo '<div id="usc-chat-offline" class="usc-chat__offline" role="note" hidden></div>';
 		echo '<div id="usc-chat-status" class="usc-chat__status" role="status" aria-live="polite"></div>';
 		echo '<div id="usc-chat-messages" class="usc-chat__messages" role="log" aria-live="polite" aria-relevant="additions"></div>';
 		echo '<form id="usc-chat-form" class="usc-chat__form" hidden>';

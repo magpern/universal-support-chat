@@ -9,6 +9,10 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Core\Configuration;
 
+use UniversalSupportChat\Availability\ExceptionSet;
+use UniversalSupportChat\Availability\InvalidScheduleException;
+use UniversalSupportChat\Availability\WeeklySchedule;
+
 /**
  * Sole owner of the universal_support_chat_settings option.
  */
@@ -16,6 +20,18 @@ final class Settings {
 
 	public const OPTION_NAME  = 'universal_support_chat_settings';
 	public const OPTION_GROUP = 'universal_support_chat_settings_group';
+
+	/**
+	 * Maximum stored length of the availability offline message (ADR-0017).
+	 */
+	private const OFFLINE_MESSAGE_MAX = 500;
+
+	/**
+	 * Default availability offline message (ADR-0017). Plain literal for the
+	 * same reason as {@see self::DEFAULT_WIDGET_GREETING}; translated where
+	 * rendered.
+	 */
+	public const DEFAULT_OFFLINE_MESSAGE = "The support team is offline right now. Leave your message here and we'll reply in this chat when we're back.";
 
 	/**
 	 * Maximum stored length of the widget title (ADR-0016).
@@ -62,7 +78,11 @@ final class Settings {
 	 *   telegram_dispatch_enabled: bool,
 	 *   widget_title: string,
 	 *   widget_greeting: string,
-	 *   widget_avatar_attachment_id: int
+	 *   widget_avatar_attachment_id: int,
+	 *   availability_schedule: array<string, array<int, array{start: string, end: string}>>,
+	 *   availability_exceptions: array<string, string|array<int, array{start: string, end: string}>>,
+	 *   availability_offline_message: string,
+	 *   availability_online_indicator: bool
 	 * }
 	 */
 	public function defaults(): array {
@@ -76,6 +96,10 @@ final class Settings {
 			'widget_title'                    => '',
 			'widget_greeting'                 => self::DEFAULT_WIDGET_GREETING,
 			'widget_avatar_attachment_id'     => 0,
+			'availability_schedule'           => WeeklySchedule::default_schedule()->to_array(),
+			'availability_exceptions'         => array(),
+			'availability_offline_message'    => self::DEFAULT_OFFLINE_MESSAGE,
+			'availability_online_indicator'   => true,
 		);
 	}
 
@@ -91,7 +115,11 @@ final class Settings {
 	 *   telegram_dispatch_enabled: bool,
 	 *   widget_title: string,
 	 *   widget_greeting: string,
-	 *   widget_avatar_attachment_id: int
+	 *   widget_avatar_attachment_id: int,
+	 *   availability_schedule: array<string, array<int, array{start: string, end: string}>>,
+	 *   availability_exceptions: array<string, string|array<int, array{start: string, end: string}>>,
+	 *   availability_offline_message: string,
+	 *   availability_online_indicator: bool
 	 * }
 	 */
 	public function get(): array {
@@ -118,7 +146,11 @@ final class Settings {
 	 *   telegram_dispatch_enabled: bool,
 	 *   widget_title: string,
 	 *   widget_greeting: string,
-	 *   widget_avatar_attachment_id: int
+	 *   widget_avatar_attachment_id: int,
+	 *   availability_schedule: array<string, array<int, array{start: string, end: string}>>,
+	 *   availability_exceptions: array<string, string|array<int, array{start: string, end: string}>>,
+	 *   availability_offline_message: string,
+	 *   availability_online_indicator: bool
 	 * }
 	 */
 	public function sanitize( $input ): array {
@@ -127,6 +159,18 @@ final class Settings {
 		if ( ! is_array( $input ) ) {
 			return $defaults;
 		}
+
+		// The previously stored option, used to preserve a valid availability
+		// config when a new submission is rejected (plan v2 §6). Guarded so
+		// the pure-PHP unit suite can still exercise `sanitize()` with no
+		// WordPress loaded.
+		$stored = function_exists( 'get_option' ) ? get_option( self::OPTION_NAME, array() ) : array();
+		$stored = is_array( $stored ) ? $stored : array();
+
+		// The schedule + exceptions are validated as ONE all-or-nothing
+		// Availability section (ADR-0017; plan v2 §6): if either fails, both
+		// prior values are preserved and one settings error is raised.
+		$availability = $this->sanitize_availability_section( $input, $stored, $defaults );
 
 		return array(
 			'remove_data_on_uninstall'        => ! empty( $input['remove_data_on_uninstall'] ),
@@ -148,7 +192,94 @@ final class Settings {
 			'widget_avatar_attachment_id'     => array_key_exists( 'widget_avatar_attachment_id', $input )
 				? $this->image_attachment_id( $input['widget_avatar_attachment_id'] )
 				: $defaults['widget_avatar_attachment_id'],
+			'availability_schedule'           => $availability['schedule'],
+			'availability_exceptions'         => $availability['exceptions'],
+			'availability_offline_message'    => array_key_exists( 'availability_offline_message', $input )
+				? $this->offline_message( $input['availability_offline_message'], $defaults['availability_offline_message'] )
+				: $defaults['availability_offline_message'],
+			'availability_online_indicator'   => array_key_exists( 'availability_online_indicator', $input )
+				? ! empty( $input['availability_online_indicator'] )
+				: $defaults['availability_online_indicator'],
 		);
+	}
+
+	/**
+	 * All-or-nothing validation of the Availability section — the weekly
+	 * schedule and the date exceptions together (ADR-0017; plan v2 §6).
+	 *
+	 * If EITHER the schedule or the exceptions fails to parse, BOTH prior
+	 * values are preserved and exactly one `settings_error` is registered —
+	 * a partial save (new exceptions kept, old schedule kept, or vice versa)
+	 * is impossible. A section identical to what is stored (e.g. the reparse
+	 * {@see self::get()} performs) passes straight through untouched, so
+	 * runtime corruption is surfaced by `AvailabilityService`'s own strict
+	 * parse rather than being silently reset here.
+	 *
+	 * @param array<string, mixed> $input    Full submitted array.
+	 * @param array<string, mixed> $stored   Current stored option array.
+	 * @param array<string, mixed> $defaults Default option array.
+	 *
+	 * @return array{schedule: mixed, exceptions: mixed}
+	 */
+	private function sanitize_availability_section( array $input, array $stored, array $defaults ): array {
+		$current_schedule   = ( isset( $stored['availability_schedule'] ) && is_array( $stored['availability_schedule'] ) )
+			? $stored['availability_schedule']
+			: $defaults['availability_schedule'];
+		$current_exceptions = ( isset( $stored['availability_exceptions'] ) && is_array( $stored['availability_exceptions'] ) )
+			? $stored['availability_exceptions']
+			: $defaults['availability_exceptions'];
+
+		$preserved = array(
+			'schedule'   => $current_schedule,
+			'exceptions' => $current_exceptions,
+		);
+
+		$has_schedule   = array_key_exists( 'availability_schedule', $input );
+		$has_exceptions = array_key_exists( 'availability_exceptions', $input );
+
+		if ( ! $has_schedule && ! $has_exceptions ) {
+			return $preserved;
+		}
+
+		$submitted_schedule   = $has_schedule ? $input['availability_schedule'] : $current_schedule;
+		$submitted_exceptions = $has_exceptions ? $input['availability_exceptions'] : $current_exceptions;
+
+		if ( $submitted_schedule === $current_schedule && $submitted_exceptions === $current_exceptions ) {
+			return $preserved;
+		}
+
+		try {
+			return array(
+				'schedule'   => WeeklySchedule::from_array( is_array( $submitted_schedule ) ? $submitted_schedule : array() )->to_array(),
+				'exceptions' => ExceptionSet::from_array( is_array( $submitted_exceptions ) ? $submitted_exceptions : array() )->to_array(),
+			);
+		} catch ( InvalidScheduleException $exception ) {
+			unset( $exception );
+
+			if ( function_exists( 'add_settings_error' ) ) {
+				add_settings_error(
+					self::OPTION_NAME,
+					'availability_section',
+					__( 'The support schedule or a date exception contained an invalid value, so the whole Availability section was not saved. Your previous support hours and exceptions are unchanged.', 'universal-support-chat' )
+				);
+			}
+
+			return $preserved;
+		}
+	}
+
+	/**
+	 * Sanitizes the offline message: plain multiline text, length-capped,
+	 * never empty (a blank value falls back to the default so a visitor is
+	 * never shown an empty offline notice).
+	 *
+	 * @param mixed  $value    Raw value.
+	 * @param string $fallback Default message.
+	 */
+	private function offline_message( $value, string $fallback ): string {
+		$clean = $this->plain_multiline_text( $value, self::OFFLINE_MESSAGE_MAX );
+
+		return '' === trim( $clean ) ? $fallback : $clean;
 	}
 
 	/**

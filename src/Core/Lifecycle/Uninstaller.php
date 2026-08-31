@@ -9,6 +9,7 @@ declare( strict_types=1 );
 
 namespace UniversalSupportChat\Core\Lifecycle;
 
+use UniversalSupportChat\Availability\AvailabilityService;
 use UniversalSupportChat\ChannelContract\Auth\NonceCleanupHandler;
 use UniversalSupportChat\Conversations\RetentionCleanupHandler;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
@@ -68,6 +69,7 @@ final class Uninstaller {
 		$this->drop_table( Migrator::LEGACY_MIGRATION_MAP_TABLE );
 		$this->drop_table( Migrator::LEGACY_MIGRATION_RUNS_TABLE );
 		delete_option( Settings::OPTION_NAME );
+		delete_option( AvailabilityService::OVERRIDE_OPTION );
 		delete_option( 'universal_support_chat_db_version' );
 		delete_option( 'universal_support_chat_migration_lock' );
 		delete_option( 'universal_support_chat_contract_own_key' );

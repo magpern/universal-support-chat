@@ -23,6 +23,8 @@
 		var input = document.getElementById('usc-chat-input');
 		var sendBtn = document.getElementById('usc-chat-send');
 		var signinEl = document.getElementById('usc-chat-signin');
+		var onlineEl = document.getElementById('usc-chat-online');
+		var offlineEl = document.getElementById('usc-chat-offline');
 
 		// Operator greeting: set once during init, before the panel can open,
 		// so aria-describedby="usc-chat-intro" resolves to real text the moment
@@ -30,6 +32,29 @@
 		if (introEl) {
 			introEl.textContent = cfg.greeting || '';
 		}
+
+		// ADR-0017: reflect the server-resolved availability state. The "online"
+		// pill is shown ONLY when the state is genuinely 'available' and the
+		// operator enabled it — never an untrue claim. The offline message is
+		// operator-authored plain text, rendered via .textContent.
+		function applyAvailability(state) {
+			var resolved = state || cfg.availability || 'available';
+			var unavailable = resolved === 'unavailable';
+			root.setAttribute('data-availability', unavailable ? 'unavailable' : 'available');
+
+			if (offlineEl) {
+				offlineEl.textContent = unavailable ? (cfg.offlineMessage || '') : '';
+				offlineEl.hidden = !unavailable || !cfg.offlineMessage;
+			}
+
+			if (onlineEl) {
+				var showPill = !unavailable && !!cfg.showOnlinePill;
+				onlineEl.textContent = showPill ? (cfg.i18n.online || '') : '';
+				onlineEl.hidden = !showPill;
+			}
+		}
+
+		applyAvailability(cfg.availability);
 
 		function markHasMessages() {
 			if (messagesEl && messagesEl.childNodes.length) {
@@ -48,8 +73,13 @@
 		// bootstrap is never overridden by a late input.focus() or status write.
 		var openSession = 0;
 
-		function setStatus(text, isError) {
+		// When sticky, poll()'s routine "clear status" is suppressed so an
+		// honest offline confirmation stays visible until an operator replies.
+		var stickyStatus = false;
+
+		function setStatus(text, isError, sticky) {
 			statusEl.textContent = text || '';
+			stickyStatus = !!sticky;
 			if (isError) {
 				statusEl.classList.add('is-error');
 			} else {
@@ -164,10 +194,16 @@
 					}
 					return;
 				}
-				setStatus('');
+				if (!stickyStatus) {
+					setStatus('');
+				}
+				applyAvailability(res.data.availability);
 				var list = res.data.messages || [];
 				for (var i = 0; i < list.length; i++) {
 					appendMessage(list[i]);
+					if (list[i].direction !== 'visitor') {
+						setStatus('');
+					}
 				}
 			}).catch(function () {
 				setStatus(cfg.i18n.errorGeneric, true);
@@ -183,6 +219,7 @@
 					throw new Error(mapError(res.status, res.data));
 				}
 				conversationUuid = res.data.conversation_uuid;
+				applyAvailability(res.data.availability);
 				return conversationUuid;
 			});
 		}
@@ -331,6 +368,12 @@
 					}
 					input.value = '';
 					pendingIdempotency = null;
+					applyAvailability(res.data.availability);
+					if (res.data.availability === 'unavailable') {
+						// Honest offline confirmation (ADR-0017 section 9) — no time
+						// estimate; sticky so the routine poll does not clear it.
+						setStatus(cfg.i18n.offlineConfirm || '', false, true);
+					}
 					return poll();
 				})
 				.catch(function (err) {

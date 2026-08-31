@@ -12,6 +12,7 @@ namespace UniversalSupportChat\Administration\Diagnostics;
 use UniversalSupportChat\Administration\Hub\HubPage;
 use UniversalSupportChat\Administration\Settings\SupportChatSettingsPage;
 use UniversalSupportChat\Audit\AuditLogRepository;
+use UniversalSupportChat\Availability\AvailabilityService;
 use UniversalSupportChat\ChannelContract\Auth\PeerRecord;
 use UniversalSupportChat\ChannelContract\Auth\PeerRepository;
 use UniversalSupportChat\Core\Capabilities\CapabilityRegistrar;
@@ -84,6 +85,13 @@ final class DiagnosticsPage {
 	private DispatchOutboxRepository $outbox;
 
 	/**
+	 * Availability service (read-only aggregates only), or null.
+	 *
+	 * @var AvailabilityService|null
+	 */
+	private ?AvailabilityService $availability;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param SchemaHealth            $schema_health Schema health.
@@ -92,6 +100,7 @@ final class DiagnosticsPage {
 	 * @param Settings                $settings      Settings owner.
 	 * @param PeerRepository          $peers         Peer store (read-only).
 	 * @param DispatchOutboxRepository $outbox        Dispatch outbox (read-only).
+	 * @param AvailabilityService|null $availability   Availability service (read-only).
 	 */
 	public function __construct(
 		SchemaHealth $schema_health,
@@ -99,7 +108,8 @@ final class DiagnosticsPage {
 		CredentialVault $vault,
 		Settings $settings,
 		PeerRepository $peers,
-		DispatchOutboxRepository $outbox
+		DispatchOutboxRepository $outbox,
+		?AvailabilityService $availability = null
 	) {
 		$this->schema_health = $schema_health;
 		$this->audit_repo    = $audit_repo;
@@ -107,6 +117,7 @@ final class DiagnosticsPage {
 		$this->settings      = $settings;
 		$this->peers         = $peers;
 		$this->outbox        = $outbox;
+		$this->availability  = $availability;
 	}
 
 	/**
@@ -173,7 +184,30 @@ final class DiagnosticsPage {
 		$this->row( __( 'Telegram adapter pairing', 'universal-support-chat' ), self::pairing_label( $peer ) );
 		$this->row( __( 'Telegram adapter usable', 'universal-support-chat' ), ( null !== $peer && $peer->is_usable() ) ? 'yes' : 'no' );
 		$this->row( __( 'Dispatch outbox (rows by state)', 'universal-support-chat' ), self::format_state_counts( $outbox_by_state ) );
+
+		if ( null !== $this->availability ) {
+			$schedule_valid = $this->availability->schedule_config_is_valid();
+			$override       = $this->availability->current_override();
+			$expiry_label   = 'n/a';
+
+			if ( null !== $override ) {
+				$expiry_label = null === $override->expires_at()
+					? 'until cleared'
+					: wp_date( 'Y-m-d H:i', $override->expires_at() );
+			}
+
+			$this->row( __( 'Availability — visitor state', 'universal-support-chat' ), $this->availability->resolve_state()->value );
+			$this->row( __( 'Availability — mode', 'universal-support-chat' ), $this->availability->current_mode() );
+			$this->row( __( 'Availability — override expiry', 'universal-support-chat' ), (string) $expiry_label );
+			$this->row( __( 'Availability — schedule config valid', 'universal-support-chat' ), $schedule_valid ? 'yes' : 'no' );
+		}
 		echo '</tbody></table>';
+
+		if ( null !== $this->availability && ! $this->availability->schedule_config_is_valid() ) {
+			echo '<div class="notice notice-warning inline"><p>'
+				. esc_html__( 'The stored support schedule or an exception could not be read, so visitors are being shown as offline (fail-safe). Re-save the schedule on the Settings page to fix it.', 'universal-support-chat' )
+				. '</p></div>';
+		}
 
 		printf(
 			'<p><a href="%s">%s</a></p>',

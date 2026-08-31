@@ -67,11 +67,20 @@ final class DispatchEnqueuer {
 	 * retryable error, exactly as it already does for a failed message
 	 * write).
 	 *
-	 * @param string                       $conversation_uuid Parent conversation UUID.
-	 * @param callable(): (ConversationMessage|null) $persist  Creates and returns the message row.
+	 * When `$within_transaction` is given it runs inside the same
+	 * transaction, immediately after the message (and, when dispatch is
+	 * enabled, its outbox row) is written. Returning `false` from it rolls
+	 * the whole unit back and yields `null` — this is how the SC-M06 offline
+	 * path (ADR-0017 §7) keeps the visitor message and the
+	 * `waiting_for_operator` transition atomic. Passing it forces a
+	 * transaction even when dispatch is disabled.
+	 *
+	 * @param string                                    $conversation_uuid  Parent conversation UUID.
+	 * @param callable(): (ConversationMessage|null)     $persist            Creates and returns the message row.
+	 * @param callable(ConversationMessage): bool|null   $within_transaction Optional post-persist step; `false` rolls back.
 	 */
-	public function persist_and_enqueue( string $conversation_uuid, callable $persist ): ?ConversationMessage {
-		if ( ! $this->is_enabled() ) {
+	public function persist_and_enqueue( string $conversation_uuid, callable $persist, ?callable $within_transaction = null ): ?ConversationMessage {
+		if ( ! $this->is_enabled() && null === $within_transaction ) {
 			$message = $persist();
 
 			return $message instanceof ConversationMessage ? $message : null;
@@ -92,7 +101,7 @@ final class DispatchEnqueuer {
 				return null;
 			}
 
-			if ( $this->is_mirrored_direction( $message->direction() ) ) {
+			if ( $this->is_enabled() && $this->is_mirrored_direction( $message->direction() ) ) {
 				$enqueued = $this->outbox->enqueue(
 					$message->uuid(),
 					$message->conversation_id(),
@@ -111,6 +120,13 @@ final class DispatchEnqueuer {
 					return null;
 				}
 			}
+
+			if ( null !== $within_transaction && false === $within_transaction( $message ) ) {
+				// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- transaction control statement.
+				$wpdb->query( 'ROLLBACK' );
+
+				return null;
+			}
 		} catch ( \Throwable $exception ) {
 			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- transaction control statement.
 			$wpdb->query( 'ROLLBACK' );
@@ -121,7 +137,7 @@ final class DispatchEnqueuer {
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- transaction control statement.
 		$wpdb->query( 'COMMIT' );
 
-		if ( $this->is_mirrored_direction( $message->direction() ) ) {
+		if ( $this->is_enabled() && $this->is_mirrored_direction( $message->direction() ) ) {
 			// ADR-0014 Amendment 1: the ONLY expedite step in the request —
 			// a non-blocking, non-throwing async kick. No Telegram I/O, no
 			// Contract call, no dependence on Universal Telegram here.

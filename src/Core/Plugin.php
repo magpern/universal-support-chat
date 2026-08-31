@@ -18,6 +18,9 @@ use UniversalSupportChat\Administration\Hub\HubPage;
 use UniversalSupportChat\Administration\PluginActionLinks;
 use UniversalSupportChat\Administration\Settings\SupportChatSettingsPage;
 use UniversalSupportChat\Audit\AuditLogger;
+use UniversalSupportChat\Availability\Admin\OverrideAction;
+use UniversalSupportChat\Availability\AvailabilityResolver;
+use UniversalSupportChat\Availability\AvailabilityService;
 use UniversalSupportChat\Audit\AuditLogRepository;
 use UniversalSupportChat\ChannelContract\Admin\PairingActions;
 use UniversalSupportChat\ChannelContract\Admin\PairingPage;
@@ -191,9 +194,17 @@ final class Plugin {
 		// topic creation, notify, delivery with delivery_class=interactive_chat
 		// — happens only in this WP-Cron worker.
 
+		// ADR-0017 (SC-M06): Support Chat is the sole availability authority.
+		// The service loads the schedule / exceptions from Settings and the
+		// manual override from its own autoloaded option, resolves state in
+		// the site timezone, and reaps an expired override. Pure resolution
+		// logic lives in AvailabilityResolver. Nothing here touches an adapter.
+		$availability = new AvailabilityService( $settings, new AvailabilityResolver(), $audit );
+
 		( new PluginActionLinks( UNIVERSAL_SUPPORT_CHAT_PLUGIN_FILE ) )->register();
-		( new ConversationsController( $schema_health, $conversations, $messages, $dispatch_enqueuer ) )->register();
-		( new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit, $dispatch_outbox ) )->register();
+		( new ConversationsController( $schema_health, $conversations, $messages, $dispatch_enqueuer, $availability ) )->register();
+		( new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit, $dispatch_outbox, $availability ) )->register();
+		( new OverrideAction( $audit ) )->register();
 		( new DispatchWorker( $dispatch_service ) )->register();
 
 		$this->telegram_dispatch_service = $dispatch_service;
@@ -208,14 +219,14 @@ final class Plugin {
 		// (the Hub), Settings, and Diagnostics. The Hub top-level is
 		// registered first so its explicit "Conversations" child label wins.
 		// No new top-level menu is added.
-		$inbox  = new ConversationInboxPage( $schema_health, $conversations );
+		$inbox  = new ConversationInboxPage( $schema_health, $conversations, $availability );
 		$detail = new ConversationDetailPage( $schema_health, $conversations, $messages, $notes );
 		( new HubPage( $inbox, $detail ) )->register();
-		( new SupportChatSettingsPage( $settings, $peers ) )->register();
-		( new DiagnosticsPage( $schema_health, $audit_repo, $vault, $settings, $peers, $dispatch_outbox ) )->register();
+		( new SupportChatSettingsPage( $settings, $peers, $audit ) )->register();
+		( new DiagnosticsPage( $schema_health, $audit_repo, $vault, $settings, $peers, $dispatch_outbox, $availability ) )->register();
 		( new LegacySettingsRedirect() )->register();
 		( new HubActions( $schema_health, $conversations, $messages, $notes, $audit, $dispatch_enqueuer ) )->register();
-		( new WidgetAssets( $settings, $schema_health ) )->register();
+		( new WidgetAssets( $settings, $schema_health, $availability ) )->register();
 
 		// The SC-M03 legacy-migration / final-cutover engine (legacy export,
 		// Phase A/Phase B migration, quiescence, binding preparation, cutover

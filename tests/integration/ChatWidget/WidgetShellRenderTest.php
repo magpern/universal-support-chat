@@ -136,10 +136,18 @@ final class WidgetShellRenderTest extends WP_UnitTestCase {
 
 		$this->assertStringNotContainsStringIgnoringCase( 'telegram', $html );
 		$this->assertStringNotContainsStringIgnoringCase( 'telegram', $blob );
-		// No availability / presence chrome (charter exclusion; SC-M06 owns it).
-		foreach ( array( 'online', 'offline', 'typically replies', 'we are away', "we're away" ) as $forbidden ) {
+
+		// SC-M06 (ADR-0017) owns availability, but it must never make an
+		// untrue online claim or a response-time promise. With no availability
+		// service wired the state defaults to "available" with the indicator
+		// off, so the online/offline regions are present but empty and hidden,
+		// and there is no ETA copy anywhere.
+		foreach ( array( 'typically replies', 'typically reply', 'response time', 'we are away', "we're away", 'minutes' ) as $forbidden ) {
 			$this->assertStringNotContainsStringIgnoringCase( $forbidden, $html );
+			$this->assertStringNotContainsStringIgnoringCase( $forbidden, $blob );
 		}
+		$this->assertStringContainsString( '<span id="usc-chat-online" class="usc-chat__online" hidden></span>', $html );
+		$this->assertStringContainsString( '<div id="usc-chat-offline" class="usc-chat__offline" role="note" hidden></div>', $html );
 	}
 
 	public function test_widget_js_still_has_no_innerhtml(): void {

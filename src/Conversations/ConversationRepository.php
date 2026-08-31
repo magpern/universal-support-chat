@@ -417,6 +417,62 @@ class ConversationRepository {
 	}
 
 	/**
+	 * Lists conversations awaiting an operator, oldest activity first
+	 * (ADR-0017 §9 / plan v2 §9 — the Hub "Waiting" view). Membership is
+	 * exactly `waiting_for_operator`, plus any legacy `new` rows as a
+	 * documented transitional inclusion (removable once none remain).
+	 *
+	 * @param int $page     1-based page.
+	 * @param int $per_page  Page size.
+	 *
+	 * @return array{items: array<int, Conversation>, total: int}
+	 */
+	public function list_waiting( int $page = 1, int $per_page = 20 ): array {
+		if ( ! $this->schema_health->is_available() ) {
+			return array(
+				'items' => array(),
+				'total' => 0,
+			);
+		}
+
+		global $wpdb;
+
+		$table    = $wpdb->prefix . Migrator::CONVERSATIONS_TABLE;
+		$page     = max( 1, $page );
+		$per_page = max( 1, min( 100, $per_page ) );
+		$offset   = ( $page - 1 ) * $per_page;
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- fixed table name.
+		$total = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$table} WHERE status IN (%s, %s)",
+				ConversationStatus::WAITING_FOR_OPERATOR,
+				ConversationStatus::NEW
+			)
+		);
+		$rows  = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE status IN (%s, %s) ORDER BY updated_at ASC, id ASC LIMIT %d OFFSET %d",
+				ConversationStatus::WAITING_FOR_OPERATOR,
+				ConversationStatus::NEW,
+				$per_page,
+				$offset
+			),
+			ARRAY_A
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		if ( ! is_array( $rows ) ) {
+			$rows = array();
+		}
+
+		return array(
+			'items' => array_map( static fn( array $row ) => Conversation::from_row( $row ), $rows ),
+			'total' => $total,
+		);
+	}
+
+	/**
 	 * Deletes a conversation by primary key.
 	 *
 	 * @param int $id Conversation primary key.

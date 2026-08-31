@@ -25,13 +25,13 @@ final class SettingsTest extends TestCase {
 	public function test_defaults_include_the_three_widget_presentation_keys(): void {
 		$defaults = ( new Settings() )->defaults();
 
-		$this->assertCount( 9, $defaults );
+		$this->assertCount( 13, $defaults );
 		$this->assertSame( '', $defaults['widget_title'] );
 		$this->assertSame( 'Hi — how can we help?', $defaults['widget_greeting'] );
 		$this->assertSame( 0, $defaults['widget_avatar_attachment_id'] );
 	}
 
-	public function test_sanitize_is_fixed_shape_at_nine_keys_and_drops_unknown(): void {
+	public function test_sanitize_is_fixed_shape_and_drops_unknown(): void {
 		$result = ( new Settings() )->sanitize(
 			array(
 				'nope'         => 'x',
@@ -39,7 +39,7 @@ final class SettingsTest extends TestCase {
 			)
 		);
 
-		$this->assertCount( 9, $result );
+		$this->assertCount( 13, $result );
 		$this->assertArrayNotHasKey( 'nope', $result );
 		$this->assertSame(
 			array(
@@ -52,12 +52,34 @@ final class SettingsTest extends TestCase {
 				'widget_title',
 				'widget_greeting',
 				'widget_avatar_attachment_id',
+				'availability_schedule',
+				'availability_exceptions',
+				'availability_offline_message',
+				'availability_online_indicator',
 			),
 			array_keys( $result )
 		);
 	}
 
-	public function test_sanitize_empty_array_yields_all_nine_defaults(): void {
+	public function test_sanitize_supplies_availability_defaults(): void {
+		$result = ( new Settings() )->sanitize( array() );
+
+		$this->assertSame(
+			array(
+				array(
+					'start' => '12:00',
+					'end'   => '15:00',
+				),
+			),
+			$result['availability_schedule']['mon']
+		);
+		$this->assertSame( array(), $result['availability_schedule']['sat'] );
+		$this->assertSame( array(), $result['availability_exceptions'] );
+		$this->assertTrue( $result['availability_online_indicator'] );
+		$this->assertStringContainsString( 'offline', $result['availability_offline_message'] );
+	}
+
+	public function test_sanitize_empty_array_yields_all_defaults(): void {
 		$result   = ( new Settings() )->sanitize( array() );
 		$defaults = ( new Settings() )->defaults();
 

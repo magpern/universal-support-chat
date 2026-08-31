@@ -24,7 +24,6 @@ final class StructuralBoundariesTest extends TestCase {
 			'Events'       => array( 'Events' ),
 			'Automations'  => array( 'Automations' ),
 			'Integrations' => array( 'Integrations' ),
-			'Availability' => array( 'Availability' ),
 		);
 	}
 
@@ -42,5 +41,10 @@ final class StructuralBoundariesTest extends TestCase {
 		$this->assertDirectoryExists( $root . 'ChannelContract' );
 		$this->assertDirectoryExists( $root . 'ChatWidget' );
 		$this->assertDirectoryExists( $root . 'Administration/Hub' );
+	}
+
+	public function test_sc_m06_availability_boundary_is_authorized(): void {
+		// ADR-0017 (SC-M06) authorizes the Availability boundary.
+		$this->assertDirectoryExists( dirname( __DIR__, 3 ) . '/src/Availability' );
 	}
 }

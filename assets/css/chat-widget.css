@@ -400,3 +400,52 @@
 		transform: none;
 	}
 }
+
+/* ---- Availability (ADR-0017) --------------------------------------- */
+
+.usc-chat__online {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+	font-size: 0.75rem;
+	font-weight: 600;
+	line-height: 1;
+	padding: 0.25em 0.6em;
+	border-radius: 999px;
+	color: #0b6b2e;
+	color: var(--usc-online, #0b6b2e);
+	background: #e4f4e9;
+	background: var(--usc-online-bg, #e4f4e9);
+}
+
+.usc-chat__online::before {
+	content: "";
+	inline-size: 0.5em;
+	block-size: 0.5em;
+	width: 0.5em;
+	height: 0.5em;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.usc-chat__online[hidden] {
+	display: none;
+}
+
+.usc-chat__offline {
+	margin: 0;
+	padding: 0.75rem 1rem;
+	font-size: 0.9rem;
+	color: #1a1a1a;
+	color: var(--usc-text, #1a1a1a);
+	background: #fbf3e2;
+	background: var(--usc-offline-bg, #fbf3e2);
+	border-bottom: 1px solid #d0d0d0;
+	border-bottom: 1px solid var(--usc-border, #d0d0d0);
+	white-space: pre-wrap;
+}
+
+.usc-chat__offline[hidden] {
+	display: none;
+}
