@@ -64,6 +64,12 @@
 
 		var conversationUuid = null;
 		var lastMessageId = 0;
+		// Message ids already rendered. `after_id` polling is not enough on its
+		// own: the periodic poll and the explicit post-send poll can both be
+		// in flight with the same stale `lastMessageId` (e.g. still 0 for the
+		// first message of a conversation), so the same row can come back twice
+		// before either response advances `lastMessageId`. Dedupe on render.
+		var seenMessageIds = {};
 		var pollTimer = null;
 		var open = false;
 		var sending = false;
@@ -91,10 +97,18 @@
 			while (messagesEl.firstChild) {
 				messagesEl.removeChild(messagesEl.firstChild);
 			}
+			seenMessageIds = {};
 			root.removeAttribute('data-has-messages');
 		}
 
 		function appendMessage(msg) {
+			if (msg.id) {
+				if (seenMessageIds[msg.id]) {
+					return;
+				}
+				seenMessageIds[msg.id] = true;
+			}
+
 			var wrap = document.createElement('div');
 			var direction = msg.direction === 'visitor' ? 'visitor' : 'operator';
 			wrap.className = 'usc-chat__bubble usc-chat__bubble--' + direction;
