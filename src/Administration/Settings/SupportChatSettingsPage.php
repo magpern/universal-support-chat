@@ -172,6 +172,9 @@ final class SupportChatSettingsPage {
 			'availability_exceptions' => 'availability.exceptions_updated',
 		);
 
+		$user_id    = function_exists( 'get_current_user_id' ) ? get_current_user_id() : 0;
+		$actor_type = $user_id > 0 ? 'operator' : 'system';
+
 		foreach ( $events as $key => $action ) {
 			if ( ( $old[ $key ] ?? null ) === ( $updated[ $key ] ?? null ) ) {
 				continue;
@@ -179,8 +182,8 @@ final class SupportChatSettingsPage {
 
 			$this->audit->record(
 				$action,
-				'operator',
-				function_exists( 'get_current_user_id' ) ? get_current_user_id() : 0,
+				$actor_type,
+				$user_id,
 				array( 'changed' => 'yes' ),
 				array( 'changed' => Classification::PUBLIC ),
 				Classification::INTERNAL

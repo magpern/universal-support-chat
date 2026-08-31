@@ -7,6 +7,9 @@ namespace UniversalSupportChat\Tests\Integration\Conversations;
 
 use UniversalSupportChat\Audit\AuditLogger;
 use UniversalSupportChat\Audit\AuditLogRepository;
+use UniversalSupportChat\Availability\AvailabilityOverride;
+use UniversalSupportChat\Availability\AvailabilityResolver;
+use UniversalSupportChat\Availability\AvailabilityService;
 use UniversalSupportChat\Conversations\ConversationRepository;
 use UniversalSupportChat\Conversations\ConversationStatus;
 use UniversalSupportChat\Conversations\MessageRepository;
@@ -109,5 +112,71 @@ final class RetentionCleanupHandlerTest extends WP_UnitTestCase {
 		$result = $handler->run( false );
 		$this->assertGreaterThanOrEqual( 1, $result['purged'] );
 		$this->assertNull( $conversations->find_by_uuid( $archived->uuid() ) );
+	}
+
+	/**
+	 * ADR-0017 §6: an expired manual override must be reaped by the existing
+	 * daily retention job's cheap tick — not only when something happens to
+	 * read {@see AvailabilityService::current_override()} from the widget,
+	 * the Hub, or Diagnostics. This test calls only the scheduled cron entry
+	 * point and never touches any of those rendering paths.
+	 */
+	public function test_scheduled_run_reaps_an_expired_override_without_any_rendering_path(): void {
+		$health        = new SchemaHealth();
+		$conversations = new ConversationRepository( $health );
+		$messages      = new MessageRepository( $health, new CredentialVault() );
+		$notes         = new NoteRepository( $health, new CredentialVault() );
+		$settings      = new Settings();
+		$audit         = new AuditLogger( $health, new Redactor() );
+		$availability  = new AvailabilityService( $settings, new AvailabilityResolver(), $audit );
+
+		update_option(
+			AvailabilityService::OVERRIDE_OPTION,
+			array(
+				'mode'       => AvailabilityOverride::MODE_FORCE_ONLINE,
+				'expires_at' => time() - MINUTE_IN_SECONDS,
+				'set_by'     => 1,
+				'set_at'     => time() - HOUR_IN_SECONDS,
+			)
+		);
+
+		$handler = new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit, null, $availability );
+
+		// The scheduled WP-Cron entry point takes no arguments.
+		$handler->run_scheduled();
+
+		$this->assertFalse( get_option( AvailabilityService::OVERRIDE_OPTION, false ), 'the expired override row must be gone' );
+
+		$repo    = new AuditLogRepository( $health );
+		$actions = array_column( $repo->recent( 10 ), 'action' );
+		$this->assertContains( 'availability.override_expired', $actions );
+	}
+
+	/**
+	 * A dry run must not reap — it is a counting-only pass.
+	 */
+	public function test_dry_run_does_not_reap_an_expired_override(): void {
+		$health        = new SchemaHealth();
+		$conversations = new ConversationRepository( $health );
+		$messages      = new MessageRepository( $health, new CredentialVault() );
+		$notes         = new NoteRepository( $health, new CredentialVault() );
+		$settings      = new Settings();
+		$audit         = new AuditLogger( $health, new Redactor() );
+		$availability  = new AvailabilityService( $settings, new AvailabilityResolver(), $audit );
+
+		update_option(
+			AvailabilityService::OVERRIDE_OPTION,
+			array(
+				'mode'       => AvailabilityOverride::MODE_FORCE_OFFLINE,
+				'expires_at' => time() - MINUTE_IN_SECONDS,
+				'set_by'     => 1,
+				'set_at'     => time() - HOUR_IN_SECONDS,
+			)
+		);
+
+		$handler = new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit, null, $availability );
+		$handler->run( true );
+
+		$this->assertIsArray( get_option( AvailabilityService::OVERRIDE_OPTION, false ), 'a dry run must leave the expired override in place' );
 	}
 }

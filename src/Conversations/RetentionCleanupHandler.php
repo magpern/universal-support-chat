@@ -10,6 +10,7 @@ declare( strict_types=1 );
 namespace UniversalSupportChat\Conversations;
 
 use UniversalSupportChat\Audit\AuditLogger;
+use UniversalSupportChat\Availability\AvailabilityService;
 use UniversalSupportChat\Core\Configuration\Settings;
 use UniversalSupportChat\Privacy\Classification;
 use UniversalSupportChat\TelegramDispatch\DispatchOutboxRepository;
@@ -66,14 +67,26 @@ final class RetentionCleanupHandler {
 	private ?DispatchOutboxRepository $dispatch_outbox;
 
 	/**
+	 * Optional availability service (ADR-0017 §6) — used only to give the
+	 * existing daily retention job a cheap tick that reaps an expired manual
+	 * override even when nothing else reads {@see AvailabilityService::current_override()}
+	 * (no widget render, no Hub/Diagnostics view). No dedicated cron job is
+	 * added for this.
+	 *
+	 * @var AvailabilityService|null
+	 */
+	private ?AvailabilityService $availability;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param ConversationRepository        $conversations    Conversation repository.
-	 * @param MessageRepository             $messages         Message repository.
-	 * @param NoteRepository                $notes            Note repository.
-	 * @param Settings                      $settings         Plugin settings.
-	 * @param AuditLogger                   $audit            Audit logger.
-	 * @param DispatchOutboxRepository|null $dispatch_outbox  Optional Telegram dispatch outbox.
+	 * @param ConversationRepository        $conversations   Conversation repository.
+	 * @param MessageRepository             $messages        Message repository.
+	 * @param NoteRepository                $notes           Note repository.
+	 * @param Settings                      $settings        Plugin settings.
+	 * @param AuditLogger                   $audit           Audit logger.
+	 * @param DispatchOutboxRepository|null $dispatch_outbox Optional Telegram dispatch outbox.
+	 * @param AvailabilityService|null      $availability    Optional availability service (override reaping).
 	 */
 	public function __construct(
 		ConversationRepository $conversations,
@@ -81,7 +94,8 @@ final class RetentionCleanupHandler {
 		NoteRepository $notes,
 		Settings $settings,
 		AuditLogger $audit,
-		?DispatchOutboxRepository $dispatch_outbox = null
+		?DispatchOutboxRepository $dispatch_outbox = null,
+		?AvailabilityService $availability = null
 	) {
 		$this->conversations   = $conversations;
 		$this->messages        = $messages;
@@ -89,6 +103,7 @@ final class RetentionCleanupHandler {
 		$this->settings        = $settings;
 		$this->audit           = $audit;
 		$this->dispatch_outbox = $dispatch_outbox;
+		$this->availability    = $availability;
 	}
 
 	/**
@@ -132,6 +147,15 @@ final class RetentionCleanupHandler {
 		$archived = 0;
 		$nulled   = 0;
 		$purged   = 0;
+
+		// ADR-0017 §6: a non-null override expiry in the past is reaped lazily
+		// on read; this cheap tick on the existing daily job is the cron-side
+		// half of that, so an override does not sit expired-but-stored until
+		// the widget, Hub, Settings page, or Diagnostics happens to read it.
+		// This has no effect on the counts below and is skipped on a dry run.
+		if ( ! $dry_run && null !== $this->availability ) {
+			$this->availability->current_override();
+		}
 
 		foreach ( $this->conversations->find_inactive_open( $inactive, 50 ) as $conversation ) {
 			++$resolved;

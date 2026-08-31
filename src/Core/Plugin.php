@@ -203,7 +203,7 @@ final class Plugin {
 
 		( new PluginActionLinks( UNIVERSAL_SUPPORT_CHAT_PLUGIN_FILE ) )->register();
 		( new ConversationsController( $schema_health, $conversations, $messages, $dispatch_enqueuer, $availability ) )->register();
-		( new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit, $dispatch_outbox ) )->register();
+		( new RetentionCleanupHandler( $conversations, $messages, $notes, $settings, $audit, $dispatch_outbox, $availability ) )->register();
 		( new OverrideAction( $audit ) )->register();
 		( new DispatchWorker( $dispatch_service ) )->register();
 

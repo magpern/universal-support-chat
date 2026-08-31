@@ -272,6 +272,80 @@ final class AvailabilityAdminTest extends WP_UnitTestCase {
 		}
 	}
 
+	/**
+	 * When there is no logged-in user (e.g. a WP-CLI or programmatic save),
+	 * the schedule/exceptions audit events must record `system`/0, never a
+	 * fabricated `operator`/0 pair.
+	 */
+	public function test_schedule_change_with_no_logged_in_user_is_audited_as_system(): void {
+		wp_set_current_user( 0 );
+
+		update_option(
+			Settings::OPTION_NAME,
+			$this->settings->sanitize(
+				array(
+					'availability_schedule' => array(
+						'wed' => array(
+							array(
+								'start' => '10:00',
+								'end'   => '11:00',
+							),
+						),
+					),
+				)
+			)
+		);
+
+		$row = null;
+		foreach ( ( new AuditLogRepository( $this->health ) )->recent( 20 ) as $candidate ) {
+			if ( 'availability.schedule_updated' === $candidate['action'] ) {
+				$row = $candidate;
+				break;
+			}
+		}
+
+		$this->assertNotNull( $row );
+		$this->assertSame( 'system', $row['actor_type'] );
+		$this->assertSame( 0, (int) $row['actor_id'] );
+	}
+
+	/**
+	 * With a logged-in operator, the same events must record `operator` and
+	 * the real user id, not `system`.
+	 */
+	public function test_schedule_change_with_a_logged_in_operator_is_audited_as_operator(): void {
+		$user_id = self::factory()->user->create( array( 'role' => 'administrator' ) );
+		wp_set_current_user( $user_id );
+
+		update_option(
+			Settings::OPTION_NAME,
+			$this->settings->sanitize(
+				array(
+					'availability_schedule' => array(
+						'thu' => array(
+							array(
+								'start' => '10:00',
+								'end'   => '11:00',
+							),
+						),
+					),
+				)
+			)
+		);
+
+		$row = null;
+		foreach ( ( new AuditLogRepository( $this->health ) )->recent( 20 ) as $candidate ) {
+			if ( 'availability.schedule_updated' === $candidate['action'] ) {
+				$row = $candidate;
+				break;
+			}
+		}
+
+		$this->assertNotNull( $row );
+		$this->assertSame( 'operator', $row['actor_type'] );
+		$this->assertSame( $user_id, (int) $row['actor_id'] );
+	}
+
 	public function test_a_save_that_does_not_touch_availability_is_not_audited(): void {
 		// A schedule change of its own is legitimately audited once here —
 		// captured as the "before" baseline so the assertion below is about
