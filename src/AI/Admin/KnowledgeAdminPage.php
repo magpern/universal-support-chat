@@ -46,7 +46,9 @@ final class KnowledgeAdminPage {
 	 * Registers the submenu.
 	 */
 	public function register(): void {
-		add_action( 'admin_menu', array( $this, 'add_menu' ) );
+		// Priority 20 so this lands after the ADR-0015 Conversations /
+		// Settings / Diagnostics submenus, keeping their frozen order.
+		add_action( 'admin_menu', array( $this, 'add_menu' ), 20 );
 	}
 
 	/**

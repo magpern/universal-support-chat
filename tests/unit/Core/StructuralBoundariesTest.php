@@ -53,6 +53,28 @@ final class StructuralBoundariesTest extends TestCase {
 	}
 
 	/**
+	 * ADR-0018 §3 / R1: an `ai`-direction answer must never open a Telegram
+	 * channel case. The dispatch mirror predicate matches only visitor /
+	 * operator — SC-M07 does not extend it.
+	 */
+	public function test_ai_direction_is_never_mirrored_to_telegram(): void {
+		$enqueuer = new \UniversalSupportChat\TelegramDispatch\DispatchEnqueuer(
+			new \UniversalSupportChat\Core\Configuration\Settings(),
+			new \UniversalSupportChat\TelegramDispatch\DispatchOutboxRepository(
+				new \UniversalSupportChat\Persistence\SchemaHealth()
+			)
+		);
+
+		$method = new \ReflectionMethod( $enqueuer, 'is_mirrored_direction' );
+		$method->setAccessible( true );
+
+		$this->assertTrue( $method->invoke( $enqueuer, \UniversalSupportChat\Conversations\ConversationMessage::DIRECTION_VISITOR ) );
+		$this->assertTrue( $method->invoke( $enqueuer, \UniversalSupportChat\Conversations\ConversationMessage::DIRECTION_OPERATOR ) );
+		$this->assertFalse( $method->invoke( $enqueuer, \UniversalSupportChat\Conversations\ConversationMessage::DIRECTION_AI ) );
+		$this->assertFalse( $method->invoke( $enqueuer, \UniversalSupportChat\Conversations\ConversationMessage::DIRECTION_SYSTEM ) );
+	}
+
+	/**
 	 * ADR-0018 §7: the OpenAI adapter is the first outbound HTTP surface in
 	 * this plugin. Every `wp_remote_*` / `wp_safe_remote_*` call in src/ must
 	 * live under src/AI/Provider/ — reached only by the async worker, never

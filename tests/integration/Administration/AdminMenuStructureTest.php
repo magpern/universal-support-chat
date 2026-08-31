@@ -73,9 +73,16 @@ final class AdminMenuStructureTest extends WP_UnitTestCase {
 		$children = array_column( $submenu[ HubPage::SLUG ], 2 );
 
 		$this->assertSame(
-			array( HubPage::SLUG, SupportChatSettingsPage::SLUG, DiagnosticsPage::SLUG ),
+			array(
+				HubPage::SLUG,
+				SupportChatSettingsPage::SLUG,
+				DiagnosticsPage::SLUG,
+				// SC-M07 (ADR-0018) adds the "AI Knowledge" submenu last,
+				// after the frozen ADR-0015 order.
+				\UniversalSupportChat\AI\Admin\KnowledgeAdminPage::SLUG,
+			),
 			$children,
-			'submenu order is Conversations, Settings, Diagnostics'
+			'submenu order is Conversations, Settings, Diagnostics, AI Knowledge'
 		);
 	}
 
