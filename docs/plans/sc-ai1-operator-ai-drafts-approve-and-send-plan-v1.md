@@ -1,5 +1,10 @@
 # SC-AI1 Operator AI Drafts and Approve-and-Send — Implementation Plan v1
 
+> **Superseded by [`sc-m07-ai-first-visitor-support-plan-v1.md`](sc-m07-ai-first-visitor-support-plan-v1.md)**
+> ([ADR-0018](../adr/0018-ai-first-visitor-support.md), Proposed in the SC-M07 documentation
+> freeze). SC-M07 supersedes the SC-AI1 milestone; this product-boundary stub is retained
+> (otherwise unedited) as immutable history and is not implemented.
+
 ## 1. References
 
 - Charter: `docs/milestones/sc-ai1-operator-ai-drafts-approve-and-send.md`

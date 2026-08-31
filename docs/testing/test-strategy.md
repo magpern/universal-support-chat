@@ -18,6 +18,24 @@ Define how quality is evidenced across milestones. Runtime test tooling is intro
 - Unit + integration jobs on supported WordPress versions.
 - Documentation link checker for `docs/**/*.md` and `README.md`.
 
+## SC-M07 — AI-first visitor support ([ADR-0018](../adr/0018-ai-first-visitor-support.md), Proposed in the freeze)
+
+When SC-M07 implementation is authorized (a separate Product Owner acceptance record), it
+adds `tests/unit/AI/` and `tests/integration/AI/` suites covering the provider contract, the
+input-independence of the server-owned system policy, prompt/data fencing against injection,
+keyword-retrieval ranking / budget / stale-and-revoked exclusion, encrypted knowledge
+persistence, rate-limit-to-handoff behaviour, turn idempotency, the handoff-reason enums,
+operator takeover, retention/uninstall, and redaction of every `ai.*` audit and diagnostics
+path.
+
+**No real AI provider call is ever made in CI — this is structural, not policy:** unit tests
+have no HTTP; integration tests wire the deterministic `AI\Provider\FakeProvider`; and a
+structural boundary test confines every `wp_*remote_*` call in `src/` to `src/AI/Provider/`
+(reached only by the async worker, never by a visitor or Hub request). A separate,
+env-var-guarded, non-CI script may exercise the real OpenAI endpoint for manual verification.
+The interop suite must stay green with Universal Telegram unchanged, and a check asserts an
+`ai`-direction message is never mirrored to Telegram.
+
 ## Documentation freeze validation
 
 For this foundation freeze: Markdown link integrity, absence of prohibited strings, and documentation-only diff — no runtime plugin code.
