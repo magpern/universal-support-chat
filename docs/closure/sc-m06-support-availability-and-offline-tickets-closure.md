@@ -8,6 +8,15 @@ Documentation-only closure record. No runtime code, test, plugin-version, schema
 CI, dependency, Universal Telegram, DEV, production, deployment, tag, or release change is
 made by this record.
 
+> **Update — DEV deployed (post-closure).** The feature was later deployed to **DEV**
+> through the existing bind-mounted checkout (DEV = `main` @
+> `4cdd213e0b9a5da1cf6802063b05196402a68b7f`, plugin `0.8.0`, `db_version` 12) and passed
+> post-deployment technical health checks. **Plan v2 §18 functional DEV acceptance and a
+> Product Owner functional sign-off are still outstanding.** Details:
+> [`sc-m06-dev-deployment-record.md`](sc-m06-dev-deployment-record.md). Production remains
+> untouched; no release or tag. The "Not deployed" statements below describe this closure
+> record only.
+
 The accepted limitations are two post-merge validation activities this environment could
 not run and that are **not** claimed as passed:
 
