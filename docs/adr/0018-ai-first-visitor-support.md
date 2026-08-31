@@ -2,21 +2,18 @@
 
 ## Status
 
-**Proposed** — merged in the SC-M07 documentation freeze for
+**Accepted** — 2026-08-31, per Product Owner implementation acceptance
+[`docs/decisions/sc-adr-0018-ai-first-po-acceptance.md`](../decisions/sc-adr-0018-ai-first-po-acceptance.md).
+Introduced for
 [SC-M07 — AI-First Visitor Support](../milestones/sc-m07-ai-first-visitor-support.md)
 and its plan
-[`sc-m07-ai-first-visitor-support-plan-v1.md`](../plans/sc-m07-ai-first-visitor-support-plan-v1.md).
-This ADR is merged **Proposed** and remains Proposed. SC-M07 plan v1 is **not authorized
-for implementation** by this freeze.
-
-Per [`docs/governance.md`](../governance.md), implementation begins only after a **standalone,
-separately merged** Product Owner implementation-acceptance record at
-`docs/decisions/sc-adr-0018-ai-first-po-acceptance.md` — authored and merged by the Product
-Owner in its own commit — which changes this Status from **Proposed** to **Accepted** and
-authorizes work packages WP1–WP9 exactly within the frozen scope of this ADR and plan v1.
-Until that record merges, no implementation branch, runtime code, schema change, credential,
-provider call, or deployment is permitted. This mirrors the ADR-0015 / ADR-0016 / ADR-0017
-sequence (freeze first; a separate later acceptance record flips the Status).
+[`sc-m07-ai-first-visitor-support-plan-v1.md`](../plans/sc-m07-ai-first-visitor-support-plan-v1.md);
+merged as **Proposed** in the SC-M07 documentation freeze on `main` at
+`537d3b050040e68f8bc227b9fd104b0fe9ab82ad` (PR #57). Implementation is authorized — from the
+merged freeze baseline, exactly within the frozen scope of this ADR and plan v1 (work
+packages WP1–WP9) — by the acceptance record cited above; implementation begins only after
+that record merges. This mirrors the ADR-0015 / ADR-0016 / ADR-0017 sequence (freeze first;
+a separate later acceptance record flips the Status).
 
 No plugin version tag, GitHub Release, DEV change, production change, live setting or data
 change, live API key, Telegram / Universal Telegram change, or Contract v1 change is part of

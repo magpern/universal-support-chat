@@ -11,6 +11,15 @@
 > implementation branch, runtime code, schema change, credential, provider call, or
 > deployment is permitted. Implementation reports cite this plan's freeze commit SHA and the
 > acceptance-record merge SHA.
+>
+> **Implementation authorized** — Product Owner implementation acceptance
+> [`docs/decisions/sc-adr-0018-ai-first-po-acceptance.md`](../decisions/sc-adr-0018-ai-first-po-acceptance.md)
+> (2026-08-31) authorizes implementation of WP1–WP9 exactly as frozen at
+> `537d3b050040e68f8bc227b9fd104b0fe9ab82ad` (PR #57), and no scope beyond it, with the open
+> decisions in §14 resolved as recorded there (models `gpt-4o-mini` default / `gpt-4o`
+> stronger; the full safety-category list; a structured `needs_human` field plus a
+> server-side keyword pre-check). The frozen technical content of this plan is unchanged by
+> that note.
 
 ## 1. References
 
