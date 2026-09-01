@@ -25,7 +25,16 @@ bin/docker/phpstan.sh
 bin/docker/test-unit.sh
 bin/docker/test-integration-wp-only.sh --wp-version=6.9 --php-version=8.1
 bin/docker/composer.sh run-script check-doc-links
+bin/docker/build-release-package.sh          # build the deployable plugin ZIP + checksum
 ```
+
+## Releases
+
+Tag-triggered: pushing `vX.Y.Z` on `main` builds `universal-support-chat-<version>.zip`
++ `.zip.sha256` in CI and publishes them as GitHub Release assets. Nothing
+generated is committed. Full procedure — including the canonical version
+source, package contents, and recovery steps — is in
+[`docs/RELEASE.md`](docs/RELEASE.md).
 
 ## Documentation
 
@@ -38,6 +47,7 @@ bin/docker/composer.sh run-script check-doc-links
 - Canonical Contract v1: [`docs/adr/0005-canonical-support-channel-contract-v1.md`](docs/adr/0005-canonical-support-channel-contract-v1.md)
 - Test strategy: [`docs/testing/`](docs/testing/)
 - Closure records: [`docs/closure/`](docs/closure/)
+- Release process: [`docs/RELEASE.md`](docs/RELEASE.md)
 
 ## License
 
