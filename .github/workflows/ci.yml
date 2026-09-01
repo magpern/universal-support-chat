@@ -64,6 +64,29 @@ jobs:
       - name: Check documentation links
         run: bin/docker/composer.sh run-script check-doc-links
 
+  package:
+    name: Release package (build validation, no publish)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the release package (Docker php service)
+        run: bin/docker/build-release-package.sh
+      - name: Inspect the artifact
+        run: |
+          set -euo pipefail
+          zip="$(ls dist/universal-support-chat-*.zip)"
+          sum="$(ls dist/universal-support-chat-*.zip.sha256)"
+          test -s "$zip"
+          test -s "$sum"
+          echo "== ZIP contents =="
+          unzip -l "$zip"
+          ( cd dist && sha256sum -c "$(basename "$sum")" )
+          names="$(unzip -Z1 "$zip")"
+          test "$(printf '%s\n' "$names" | cut -d/ -f1 | sort -u)" = "universal-support-chat"
+          printf '%s\n' "$names" | grep -qx 'universal-support-chat/universal-support-chat.php'
+          printf '%s\n' "$names" | grep -qx 'universal-support-chat/vendor/autoload.php'
+          ! printf '%s\n' "$names" | grep -qE '/(\.git|\.github|\.claude|tests|docs|docker|bin|scripts)/'
+
   interop:
     runs-on: ubuntu-latest
     strategy:

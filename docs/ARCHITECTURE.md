@@ -73,6 +73,14 @@ Do not maintain a second full copy of Contract v1 in another repository.
 - Independent integer schema version option `universal_support_chat_db_version` — target **`7`** at SC-M03 work package 0 (1=audit, 2=conversations, 3=messages, 4=notes, 5=channel peers, 6=contract nonces, 7=channel status); **`12`** on `main` today. SC-M07 ([ADR-0018](adr/0018-ai-first-visitor-support.md)) plans **`13`** — migration step 13 adds `universal_support_chat_ai_turns` (metadata-only) and `universal_support_chat_knowledge_sources` (encrypted-content-only); done only when SC-M07 implementation is authorized, not by the documentation freeze.
 - No Contract v1 release tag is required for adapter pinning; commit SHA is sufficient.
 - SC-M03 work package 0 does not create a GitHub Release or version tag.
+- **Release packaging**: `UNIVERSAL_SUPPORT_CHAT_VERSION` and the plugin-header
+  `Version:` line are the single canonical version source and must agree.
+  Pushing an annotated `vX.Y.Z` tag on `main` runs `.github/workflows/release.yml`,
+  which builds `universal-support-chat-<version>.zip` + `.zip.sha256` via
+  `scripts/build-release-package.sh` (Docker wrapper `bin/docker/build-release-package.sh`),
+  fails if the packaged version ≠ tag, and publishes a GitHub Release with both
+  assets. Generated ZIPs/checksums are CI outputs and are never committed. Full
+  procedure: [`docs/RELEASE.md`](RELEASE.md).
 
 ## Where to look
 

@@ -1,3 +1,8 @@
 /vendor/
 .phpunit.result.cache
 *.zip
+
+# Release build output (CI-generated; never commit)
+/dist/
+*.zip
+*.zip.sha256

@@ -1,0 +1,71 @@
+name: Release
+
+# Publishes a GitHub Release when an exact version tag is pushed. Tags are
+# cut from `main` after the full CI matrix is green on that commit; this
+# workflow re-runs the fast quality gates, builds the package with the
+# repository's Docker toolchain, verifies the package version equals the tag,
+# and attaches the ZIP + checksum to the Release.
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the exact tagged commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Install dependencies
+        run: bin/docker/composer.sh install --no-interaction
+
+      - name: PHPCS
+        run: bin/docker/phpcs.sh
+      - name: PHPStan
+        run: bin/docker/phpstan.sh
+      - name: Unit tests (PHP 8.3)
+        run: bin/docker/test-unit.sh --php-version=8.3
+
+      - name: Build the release package for the tag version
+        run: bin/docker/build-release-package.sh "${GITHUB_REF_NAME#v}"
+
+      - name: Verify package version matches the Git tag
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          zip="dist/universal-support-chat-${tag_version}.zip"
+          sum="${zip}.sha256"
+          [ -s "$zip" ] || { echo "::error::missing $zip for tag ${GITHUB_REF_NAME}"; ls -la dist || true; exit 1; }
+          [ -s "$sum" ] || { echo "::error::missing $sum"; exit 1; }
+          ( cd dist && sha256sum -c "$(basename "$sum")" )
+          header="$(sed -nE 's/^[[:space:]]*\*?[[:space:]]*Version:[[:space:]]*([0-9A-Za-z.+-]+).*/\1/p' universal-support-chat.php | head -n1)"
+          const="$(sed -nE "s/.*UNIVERSAL_SUPPORT_CHAT_VERSION',[[:space:]]*'([^']+)'.*/\1/p" universal-support-chat.php | head -n1)"
+          [ "$header" = "$tag_version" ] || { echo "::error::plugin header ($header) != tag ($tag_version)"; exit 1; }
+          [ "$const" = "$tag_version" ] || { echo "::error::UNIVERSAL_SUPPORT_CHAT_VERSION ($const) != tag ($tag_version)"; exit 1; }
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/universal-support-chat-*.zip
+            dist/universal-support-chat-*.zip.sha256
+          fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+
+      # TODO(private artifact server): a follow-up may add a step here mirroring
+      # the ZIP + .sha256 to the internal artifact server, using a dedicated
+      # secret (never GITHUB_TOKEN), running only after the Release is created.
+      # Endpoint/protocol/secret are not defined for this repo yet.

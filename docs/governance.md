@@ -52,6 +52,18 @@ Once a milestone charter is frozen, changing it requires, in order:
 3. Product Owner approval.
 4. A standalone, documentation-only commit recording the change, never bundled with implementation code.
 
+## Release packaging
+
+- The deployable plugin ZIP is produced only by `scripts/build-release-package.sh`
+  (run via `bin/docker/build-release-package.sh`) and published only by
+  `.github/workflows/release.yml`, triggered by an annotated `vX.Y.Z` tag on
+  `main`. See [`RELEASE.md`](RELEASE.md).
+- Generated release artifacts (ZIP, checksum) are CI outputs; they are
+  `.gitignore`d and must never be committed.
+- A release workflow never rewrites version files. The version in
+  `universal-support-chat.php` (header + `UNIVERSAL_SUPPORT_CHAT_VERSION`) is
+  authoritative and must be set and merged to `main` before tagging.
+
 ## Documentation authority
 
 - Documents in this repository are self-contained and authoritative after merge to `main`.
