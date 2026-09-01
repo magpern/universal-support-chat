@@ -43,7 +43,7 @@ Everything runs in the repo's Docker toolchain — no host PHP/Composer:
 
 ```bash
 bin/docker/build-release-package.sh            # version from the plugin file
-bin/docker/build-release-package.sh 0.8.0      # must match the plugin file
+bin/docker/build-release-package.sh 0.9.0      # must match the plugin file
 
 # validate
 cd dist
@@ -64,8 +64,8 @@ directly anywhere `php`, `composer`, `zip`, `unzip` and `rsync` are on `PATH`.
 3. Create and push an annotated tag matching `v[0-9]+.[0-9]+.[0-9]+`
    (a `-rc.N`/`-beta.N` suffix marks the GitHub Release as a prerelease):
    ```bash
-   git tag -a v0.8.0 -m "Universal Support Chat 0.8.0"
-   git push origin v0.8.0
+   git tag -a v0.9.0 -m "Universal Support Chat 0.9.0"
+   git push origin v0.9.0
    ```
 4. `release.yml` fires on the tag: it re-runs PHPCS, PHPStan and the unit
    suite, builds the ZIP with `bin/docker/build-release-package.sh`, verifies
