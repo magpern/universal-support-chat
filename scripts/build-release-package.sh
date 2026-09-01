@@ -22,10 +22,10 @@ set -Eeuo pipefail
 SLUG="universal-support-chat"
 MAIN_FILE="universal-support-chat.php"
 VERSION_CONST="UNIVERSAL_SUPPORT_CHAT_VERSION"
-INCLUDE=("$MAIN_FILE" uninstall.php src assets composer.json README.md LICENSE)
-HAS_README_TXT="0"        # validate readme.txt Stable tag + changelog
+INCLUDE=("$MAIN_FILE" uninstall.php src assets composer.json readme.txt README.md LICENSE)
+HAS_README_TXT="1"        # validate readme.txt Stable tag + changelog
 HAS_CHANGELOG_MD="0"    # validate CHANGELOG.md "## [<version>]" section
-REQUIRE_VENDOR_FILE=""  # path under vendor/ that must exist post-install
+REQUIRE_VENDOR_FILE="yahnis-elsts/plugin-update-checker/plugin-update-checker.php"
 # ==========================================================================
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
